@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#12161c">
-<title>AiJob 0.4.0</title>
+<title>AiJob 0.7.2</title>
 <style>
 :root{
   --ink:#12161c; --ink-2:#1c232d; --paper:#f2efe9; --muted:#8b95a3;
@@ -155,7 +155,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><h1>AiJob</h1><span class="ver">0.4.0</span><span class="dot" id="storeState">local</span></div>
+    <div class="brand"><h1>AiJob</h1><span class="ver">0.7.2</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="add" aria-selected="true">Annuncio</button>
       <button role="tab" data-v="rank" aria-selected="false">AiSearch</button>
@@ -217,6 +217,12 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
     <div class="card ledger" id="factList"></div>
   </div>
 
+  <h2>Cosa ti chiede il mercato</h2>
+  <p class="hint" id="gapHint">Analizza almeno un annuncio: qui compaiono i requisiti che ricorrono e che il tuo badge non sostiene.</p>
+  <div id="gapList"></div>
+  <div class="btnrow"><button class="act ghost small" id="btnFormazione">Consiglia formazione</button></div>
+  <div id="formazioneBox"></div>
+
   <h2>Vincoli e obiettivi</h2>
   <p class="hint">Non entrano nei documenti. Servono a capire se conviene candidarsi, non se sei capace.</p>
   <div class="field"><label for="pTargets">Ruoli cercati</label><input type="text" id="pTargets" placeholder="custode, controllo accessi, back office"></div>
@@ -265,6 +271,22 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
     <button class="act ghost small" id="btnModels">Elenca modelli</button>
   </div>
   <div id="setMsg" role="status" aria-live="polite"></div>
+  <hr class="sep">
+  <h2>Google</h2>
+  <div id="gBlockBox"></div>
+  <p class="hint" id="gState">Non collegato.</p>
+  <div class="btnrow">
+    <button class="act small" id="btnGConnect">Collega Google</button>
+    <button class="act ghost small" id="btnGOff">Scollega</button>
+  </div>
+  <div class="btnrow">
+    <button class="act ghost small" id="btnGDiag">Diagnostica</button>
+    <button class="act ghost small" id="btnGManual">Collegamento manuale</button>
+  </div>
+  <div id="gDiagBox"></div>
+  <p class="note">Permessi: creare bozze in Gmail, salvare su Drive i soli file creati da AiJob, aggiungere colloqui al calendario. AiJob non legge la tua posta e non vede gli altri file del Drive.</p>
+  <p class="note">Il collegamento avviene per reindirizzamento: nessuna libreria esterna, nessuna finestra a comparsa. Funziona con Brave e con i blocchi attivi. Il token vive nella scheda corrente e dura circa un'ora.</p>
+
   <hr class="sep">
   <h2>Limiti dichiarati</h2>
   <div class="card flat" style="font-size:14px;color:var(--muted)">
@@ -315,11 +337,264 @@ document.querySelectorAll("nav.tabs button").forEach(b=>{
     document.querySelectorAll("section.view").forEach(s=>s.classList.remove("on"));
     $("v-"+b.dataset.v).classList.add("on");
     if(b.dataset.v==="rank"){renderRank();renderSearch();renderPresets();}
-    if(b.dataset.v==="badge")renderBadge();
+    if(b.dataset.v==="badge"){renderBadge();renderGap();}
     if(b.dataset.v==="add")checkBadge();
     window.scrollTo(0,0);
   });
 });
+
+/* ---------- PDF: generatore minimo, nessuna libreria ---------- */
+// Generatore PDF minimo: solo testo, Helvetica, A4, nessuna libreria.
+function makePdf(title, text){
+  const W=595.28, H=841.89, M=56, FS=11, LH=15.5, MAXW=W-M*2;
+  // larghezze Helvetica (unita' 1/1000) approssimate per ASCII+Latin1
+  const w=c=>{const o=c.charCodeAt(0);
+    if(o===32)return 278; if(o>=48&&o<=57)return 556;
+    if("ilj|!.,:;'".indexOf(c)>=0)return 233;
+    if("ftI()[]-".indexOf(c)>=0)return 300;
+    if("MW@".indexOf(c)>=0)return 880;
+    if(o>=65&&o<=90)return 690;
+    if("mw".indexOf(c)>=0)return 833;
+    return 545;};
+  const tw=s=>{let t=0;for(const c of s)t+=w(c);return t*FS/1000;};
+  // WinAnsi: rimappa la punteggiatura tipografica, scarta il resto fuori Latin-1
+  const WIN={0x20AC:0x80,0x201A:0x82,0x0192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,
+    0x2021:0x87,0x02C6:0x88,0x2030:0x89,0x2039:0x8B,0x2018:0x91,0x2019:0x92,
+    0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,0x203A:0x9B};
+  const win=s=>Array.from(String(s)).map(c=>{const o=c.charCodeAt(0);
+    if(o<256)return c; if(WIN[o])return String.fromCharCode(WIN[o]);
+    if(o===0x00A0)return " "; return "?";}).join("");
+  const esc=s=>win(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+  // WinAnsi: i caratteri latini accentati passano come byte singolo
+  const lines=[];
+  String(text||"").split(/\r?\n/).forEach(par=>{
+    if(!par.trim()){lines.push("");return;}
+    let cur="";
+    par.split(/\s+/).forEach(word=>{
+      const t=cur?cur+" "+word:word;
+      if(tw(t)<=MAXW){cur=t;}
+      else{ if(cur)lines.push(cur);
+        while(tw(word)>MAXW){let k=1;while(k<word.length&&tw(word.slice(0,k+1))<=MAXW)k++;
+          lines.push(word.slice(0,k)); word=word.slice(k);}
+        cur=word;}
+    });
+    if(cur)lines.push(cur);
+  });
+  const perPage=Math.floor((H-M*2)/LH);
+  const pages=[]; for(let i=0;i<lines.length;i+=perPage)pages.push(lines.slice(i,i+perPage));
+  if(!pages.length)pages.push([""]);
+
+  const objs=[]; const push=s=>{objs.push(s);return objs.length;};
+  const kids=[]; const contentIds=[];
+  // 1 catalog, 2 pages, 3 font  -> riservati
+  objs.push(null,null,null);
+  pages.forEach(pl=>{
+    let st="BT /F1 "+FS+" Tf "+LH+" TL 1 0 0 1 "+M+" "+(H-M)+" Tm\n";
+    pl.forEach(l=>{ st+="("+esc(l)+") Tj T*\n"; });
+    st+="ET";
+    const cid=push("<< /Length "+st.length+" >>\nstream\n"+st+"\nendstream");
+    contentIds.push(cid);
+  });
+  contentIds.forEach(cid=>{
+    const pid=push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+W.toFixed(2)+" "+H.toFixed(2)+
+      "] /Resources << /Font << /F1 3 0 R >> >> /Contents "+cid+" 0 R >>");
+    kids.push(pid+" 0 R");
+  });
+  objs[0]="<< /Type /Catalog /Pages 2 0 R >>";
+  objs[1]="<< /Type /Pages /Kids ["+kids.join(" ")+"] /Count "+kids.length+" >>";
+  objs[2]="<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+
+  let out="%PDF-1.4\n"; const off=[];
+  objs.forEach((o,i)=>{ off.push(out.length); out+=(i+1)+" 0 obj\n"+o+"\nendobj\n"; });
+  const xref=out.length;
+  out+="xref\n0 "+(objs.length+1)+"\n0000000000 65535 f \n";
+  off.forEach(o=>{ out+=String(o).padStart(10,"0")+" 00000 n \n"; });
+  out+="trailer\n<< /Size "+(objs.length+1)+" /Root 1 0 R /Info << /Title ("+esc(String(title||"AiJob"))+
+       ") /Producer (AiJob) >> >>\nstartxref\n"+xref+"\n%%EOF";
+  const bytes=new Uint8Array(out.length);
+  for(let i=0;i<out.length;i++)bytes[i]=out.charCodeAt(i)&0xff;
+  return bytes;
+}
+
+function pdfBlob(t,x){ return new Blob([makePdf(t,x)],{type:"application/pdf"}); }
+function scarica(blob,nome){
+  const u=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=u;a.download=nome;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+function b64(bytes){ let s=""; for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]); return btoa(s); }
+function b64utf8(str){ return btoa(String.fromCharCode.apply(null,new TextEncoder().encode(str))); }
+function nomeFile(j,tipo){
+  const co=String(j.job.company||"azienda").replace(/[^A-Za-z0-9]+/g,"_").slice(0,28);
+  return j.id+"_"+tipo+"_"+co+".pdf";
+}
+
+/* ---------- Google: OAuth senza librerie, reindirizzamento invece di popup ---------- */
+const GCLIENT="327520513761-r11hmo2ri14qohvlmb1t91dch204oclp.apps.googleusercontent.com";
+const GREDIR="https://robertonarcisojr.github.io/AiJob/";
+const GSCOPES=["https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/calendar.events"].join(" ");
+const SS={
+  _m:{},
+  get(k){ try{ const v=sessionStorage.getItem(k); if(v!==null)return v; }catch(e){}
+    return Object.prototype.hasOwnProperty.call(this._m,k)?this._m[k]:null; },
+  set(k,v){ this._m[k]=v; try{ sessionStorage.setItem(k,v); }catch(e){} },
+  del(k){ delete this._m[k]; try{ sessionStorage.removeItem(k); }catch(e){} }
+};
+function gToken(){ const t=SS.get("g.tok"), e=+(SS.get("g.exp")||0); return (t&&Date.now()<e)?t:null; }
+function gOk(){ return !!gToken(); }
+function gRender(){
+  const el=$("gState"); if(!el)return;
+  const e=+(SS.get("g.exp")||0);
+  el.innerHTML=gOk()?'<span style="color:var(--ok)">Collegato.</span> Scade alle '+
+    new Date(e).toLocaleTimeString("it-CH",{hour:"2-digit",minute:"2-digit"})+'.':"Non collegato.";
+}
+function randState(){ const a=new Uint32Array(4); crypto.getRandomValues(a);
+  return Array.from(a).map(x=>x.toString(36)).join(""); }
+function gAuthUrl(pending){
+  const st=randState();
+  SS.set("g.state",st);
+  SS.set("g.pending",pending?JSON.stringify(pending):"");
+  return "https://accounts.google.com/o/oauth2/v2/auth"+
+    "?client_id="+encodeURIComponent(GCLIENT)+
+    "&redirect_uri="+encodeURIComponent(GREDIR)+
+    "&response_type=token&include_granted_scopes=true&prompt=consent"+
+    "&scope="+encodeURIComponent(GSCOPES)+
+    "&state="+encodeURIComponent(st);
+}
+function gAuthStart(pending){ location.href=gAuthUrl(pending); }
+function gHandleReturn(){
+  const h=location.hash||"";
+  if(h.indexOf("access_token")<0&&h.indexOf("error")<0)return null;
+  const p={};
+  h.substring(1).split("&").forEach(kv=>{ const i=kv.indexOf("=");
+    if(i>0)p[decodeURIComponent(kv.slice(0,i))]=decodeURIComponent(kv.slice(i+1).replace(/\+/g," ")); });
+  try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+  if(p.error) return {err:p.error};
+  if(p.state!==SS.get("g.state")) return {err:"state_mismatch"};
+  SS.del("g.state");
+  if(!p.access_token) return {err:"no_token"};
+  SS.set("g.tok",p.access_token);
+  SS.set("g.exp",String(Date.now()+((+p.expires_in||3600)-60)*1000));
+  const pend=SS.get("g.pending"); SS.del("g.pending");
+  return {ok:true,pending:pend?JSON.parse(pend):null};
+}
+async function gFetch(url,opt){
+  const t=gToken();
+  if(!t) throw new Error("Non collegato a Google.");
+  opt=opt||{}; opt.headers=Object.assign({},opt.headers||{},{Authorization:"Bearer "+t});
+  const r=await fetch(url,opt);
+  if(r.status===401){ SS.del("g.tok"); SS.del("g.exp"); gRender();
+    throw new Error("Sessione Google scaduta. Ricollega dalla scheda Chiave."); }
+  if(!r.ok) throw new Error("Google "+r.status+": "+(await r.text()).slice(0,200));
+  return r.json();
+}
+let braveDetected=false;
+(function(){
+  try{
+    if(navigator.brave&&typeof navigator.brave.isBrave==="function"){
+      navigator.brave.isBrave().then(v=>{ braveDetected=!!v; gWarn(); }).catch(()=>{});
+    }
+  }catch(e){}
+})();
+function inIframe(){ try{ return window.top!==window.self; }catch(e){ return true; } }
+function gBlocco(){
+  // restituisce la ragione per cui il collegamento non puo' funzionare, oppure null
+  if(inIframe()) return "L'app è dentro una cornice di anteprima. Google rifiuta l'accesso da qui: aprila nel browser, all'indirizzo del sito.";
+  if(location.protocol!=="https:") return "L'app è aperta come file locale ("+location.protocol+"). Google accetta solo https: apri il sito, non il file scaricato.";
+  if(location.origin+location.pathname!==GREDIR) return "L'indirizzo attuale non coincide con quello registrato in Google. Apri esattamente "+GREDIR;
+  return null;
+}
+function gWarn(){
+  const el=$("gBlockBox"); if(!el)return;
+  const b=gBlocco();
+  let h="";
+  if(b){
+    h='<div class="warnbox"><b>Il collegamento non può funzionare da qui.</b><br>'+esc(b);
+    if(inIframe())h+='<br><br><a class="slink" href="'+GREDIR+'" target="_blank" rel="noopener">Apri AiJob nel browser<small>'+GREDIR+'</small></a>';
+    h+='</div>';
+  }
+  if(braveDetected&&!gOk()){
+    h+='<div class="warnbox" style="border-color:var(--warn);background:#1c1710">'+
+       '<b>Browser Brave.</b> Se il reindirizzamento non parte, tocca l\'icona del leone nella barra '+
+       'degli indirizzi e disattiva gli Scudi per questo sito, poi ricarica. In alternativa usa il '+
+       'collegamento manuale qui sotto.</div>';
+  }
+  el.innerHTML=h;
+}
+async function gDiag(){
+  const r=[], org=location.origin, qui=location.origin+location.pathname;
+  r.push(["Dentro una cornice", inIframe()?"sì":"no", inIframe()?"err":"ok"]);
+  r.push(["Protocollo", location.protocol, location.protocol==="https:"?"ok":"err"]);
+  r.push(["Origine attuale", org, org==="https://robertonarcisojr.github.io"?"ok":"err"]);
+  r.push(["Indirizzo attuale", qui, qui===GREDIR?"ok":"err"]);
+  r.push(["Ritorno registrato", GREDIR, qui===GREDIR?"ok":"err"]);
+  r.push(["Rete secondo il browser", navigator.onLine?"in linea":"non in linea", navigator.onLine?"ok":"err"]);
+  let ss="ok"; try{ sessionStorage.setItem("_t","1"); sessionStorage.removeItem("_t"); }catch(e){ ss="bloccata"; }
+  r.push(["Memoria di sessione", ss, ss==="ok"?"ok":"err"]);
+  let ls="ok"; try{ localStorage.setItem("_t","1"); localStorage.removeItem("_t"); }catch(e){ ls="bloccata"; }
+  r.push(["Memoria del browser", ls, ls==="ok"?"ok":"err"]);
+  let net="bloccata";
+  try{ await fetch("https://accounts.google.com/o/oauth2/v2/auth",{mode:"no-cors",cache:"no-store"}); net="raggiungibile"; }
+  catch(e){ net="bloccata"; }
+  r.push(["accounts.google.com", net, net==="raggiungibile"?"ok":"err"]);
+  r.push(["Librerie esterne richieste", "nessuna", "ok"]);
+  r.push(["Browser Brave", braveDetected?"sì":"no", ""]);
+  r.push(["Token attivo", gOk()?"sì":"no", gOk()?"ok":""]);
+  const rotte=r.filter(x=>x[2]==="err");
+  r.unshift(["STADIO CHE FALLISCE", rotte.length?rotte[0][0]:"nessuno", rotte.length?"err":"ok"]);
+  return r;
+}
+function mimeHead(s){ return "=?UTF-8?B?"+b64utf8(String(s||""))+"?="; }
+async function gmailDraft(j){
+  const p=j.packet||{}, e=p.email||{}, bnd="aijob"+Date.now(), parts=[];
+  parts.push("--"+bnd+"\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"+b64utf8(e.body||"")+"\r\n");
+  [["CV",p.cv],["Lettera",p.cover_letter]].forEach(function(par){
+    if(!par[1])return;
+    parts.push("--"+bnd+"\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\n"+
+      'Content-Disposition: attachment; filename="'+nomeFile(j,par[0])+'"\r\n\r\n'+
+      b64(makePdf(par[0]+" "+(j.job.role||""),par[1]))+"\r\n");
+  });
+  const raw="To: "+(e.to||"")+"\r\nSubject: "+mimeHead(e.subject)+
+    '\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="'+bnd+'"\r\n\r\n'+
+    parts.join("")+"--"+bnd+"--";
+  const enc=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  return gFetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:{raw:enc}})});
+}
+async function driveSave(j){
+  const p=j.packet||{}, files=[];
+  if(p.cv)files.push([nomeFile(j,"CV"),makePdf("CV",p.cv)]);
+  if(p.cover_letter)files.push([nomeFile(j,"Lettera"),makePdf("Lettera",p.cover_letter)]);
+  files.push([j.id+"_dossier.json",new TextEncoder().encode(JSON.stringify({
+    id:j.id,azienda:j.job.company,ruolo:j.job.role,fit:n(j.fit.punteggio),
+    convenienza:n(j.conv.punteggio),verdetto:j.verdetto,evidenze:j.evidence,fonte:j.url,stato:j.stato},null,2))]);
+  let done=0;
+  for(const f of files){
+    const bnd="up"+Date.now()+done;
+    const tipo=f[0].slice(-4)===".pdf"?"application/pdf":"application/json";
+    const body="--"+bnd+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+
+      JSON.stringify({name:f[0]})+"\r\n--"+bnd+"\r\nContent-Type: "+tipo+
+      "\r\nContent-Transfer-Encoding: base64\r\n\r\n"+b64(f[1])+"\r\n--"+bnd+"--";
+    await gFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+      {method:"POST",headers:{"Content-Type":"multipart/related; boundary="+bnd},body:body});
+    done++;
+  }
+  return done;
+}
+async function calEvent(j,quando){
+  const start=new Date(quando);
+  if(isNaN(start.getTime()))throw new Error("Data non valida. Usa AAAA-MM-GG HH:MM");
+  const end=new Date(start.getTime()+3600000);
+  return gFetch("https://www.googleapis.com/calendar/v3/calendars/primary/events",
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      summary:"Colloquio "+(j.job.company||""),
+      description:(j.job.role||"")+"\n"+(j.url||"")+"\n\nAiJob "+j.id,
+      location:j.job.location||"",
+      start:{dateTime:start.toISOString()},end:{dateTime:end.toISOString()},
+      reminders:{useDefault:false,overrides:[{method:"popup",minutes:120}]}})});
+}
 
 /* ---------- adapter LLM ---------- */
 async function llm(prompt){
@@ -389,6 +664,63 @@ CV:
 `+cv.replace(/>>>/g,"> > >")+`
 CV
 Fine del testo. Applica le REGOLE ASSOLUTE.`;
+}
+
+/* ---------- aggregazione gap: i numeri sono calcolati, mai dedotti dal modello ---------- */
+function norm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9àèéìòù ]+/g," ").replace(/\s+/g," ").trim(); }
+function gapStats(){
+  const d=store(), map={};
+  d.jobs.forEach(j=>{
+    (j.evidence||[]).forEach(e=>{
+      if(e.status!=="NOT_SUPPORTED"&&e.status!=="PARTIALLY_SUPPORTED")return;
+      const k=norm(e.requirement); if(!k||k.length<4)return;
+      if(!map[k])map[k]={req:e.requirement,tot:0,mancanti:0,parziali:0,aziende:[]};
+      map[k].tot++;
+      if(e.status==="NOT_SUPPORTED")map[k].mancanti++; else map[k].parziali++;
+      const co=j.job.company||"—";
+      if(map[k].aziende.indexOf(co)<0)map[k].aziende.push(co);
+    });
+  });
+  return Object.keys(map).map(k=>Object.assign({key:k},map[k]))
+    .sort((a,b)=>(b.mancanti-a.mancanti)||(b.tot-a.tot));
+}
+function renderGap(){
+  const d=store(), g=gapStats();
+  if(!d.jobs.length){ $("gapHint").textContent="Analizza almeno un annuncio: qui compaiono i requisiti che ricorrono e che il tuo badge non sostiene.";
+    $("gapList").innerHTML=""; return; }
+  if(!g.length){ $("gapHint").textContent="Su "+d.jobs.length+" annunci nessun requisito è risultato scoperto. Il badge li sostiene tutti.";
+    $("gapList").innerHTML=""; return; }
+  $("gapHint").innerHTML="Su <b>"+d.jobs.length+"</b> annunci analizzati, <b>"+g.length+
+    "</b> requisiti distinti non sono pienamente sostenuti. Conteggi calcolati dai tuoi dati, non stimati.";
+  $("gapList").innerHTML='<div class="card">'+g.slice(0,12).map(x=>
+    '<div class="ev" data-s="'+(x.mancanti?"NOT_SUPPORTED":"PARTIALLY_SUPPORTED")+'"><div class="bar"></div><div>'+
+    '<div class="req">'+esc(x.req)+'</div>'+
+    '<div class="src">'+x.tot+' annunci su '+d.jobs.length+' · '+esc(x.aziende.slice(0,3).join(", "))+'</div>'+
+    '<div class="st">'+(x.mancanti?"\u2717 SENZA PROVA in "+x.mancanti:"\u2248 PARZIALE in "+x.parziali)+'</div>'+
+    '</div></div>').join("")+'</div>';
+}
+function pFormazione(g,badge,prefs){
+  return RULES+`
+
+COMPITO: raggruppa i requisiti scoperti in temi formativi e proponi per ciascuno un'azione concreta.
+Restituisci:
+{"gruppi":[{"tema":"nome breve","requisiti":["copia ESATTA delle stringhe requisito che appartengono a questo tema"],
+ "azione":"cosa fare in concreto","tipo":"corso|certificazione|autoformazione|esperienza","tempo":"stima realistica",
+ "costo":"gratuito|basso|medio|alto|non noto","dove":"tipo di ente in Ticino o Lombardia, senza inventare nomi di scuole"}],
+ "non_vale_la_pena":["temi su cui NON conviene investire, con motivo"]}
+
+VINCOLI:
+- In "requisiti" copia le stringhe alla lettera dall'elenco fornito. Non inventarne di nuove.
+- NON produrre numeri, percentuali o conteggi: li calcola il programma.
+- NON inventare nomi di scuole, corsi o enti specifici. Indica il tipo di ente.
+- Tieni conto di cio' che la persona sa gia': non proporre cio' che il profilo sostiene gia'.
+- Se un requisito non e' colmabile in tempi utili, mettilo in "non_vale_la_pena" e spiega perche'.
+
+REQUISITI SCOPERTI (dal confronto reale con gli annunci):
+`+JSON.stringify(g.slice(0,20).map(x=>x.req))+`
+
+PROFILO: `+JSON.stringify(badge)+`
+VINCOLI E OBIETTIVO: `+JSON.stringify(prefs);
 }
 
 /* ---------- analisi annuncio vs badge ---------- */
@@ -622,7 +954,7 @@ function openSend(i){
     '<button data-go="tg" data-i="'+i+'">Telegram</button>'+
     '<button data-go="cp" data-i="'+i+'">Copia tutto</button>'+
     '<button data-go="back">Indietro</button></div>'+
-    '<p class="note">Nessun canale può allegare file da solo: il CV va allegato a mano, oppure incollato nel messaggio. L\'invio finale lo fai tu.</p></div>';
+    '<p class="note">Questi canali non allegano file. Per gli allegati veri usa la bozza Gmail nel pannello del dossier.</p></div>';
   box.querySelectorAll("button[data-go]").forEach(b=>b.addEventListener("click",()=>{
     const g=b.dataset.go;
     if(g==="back"){renderChan();return;}
@@ -749,7 +1081,35 @@ function wireDetail(box){
     const href="mailto:"+encodeURIComponent(e.to||"")+"?subject="+encodeURIComponent(e.subject||"")+"&body="+encodeURIComponent(e.body||"");
     if(href.length>1900){copy(e.body||"","Email");toast("Email troppo lunga per il link: l'ho copiata.");return;}
     window.location.href=href;}));
-  box.querySelectorAll("button[data-print]").forEach(b=>b.addEventListener("click",()=>window.print()));
+  box.querySelectorAll("button[data-pdf]").forEach(b=>b.addEventListener("click",()=>{
+    const j=store().jobs[+b.dataset.pdf], p=j.packet||{};
+    if(p.cv)scarica(pdfBlob("CV",p.cv),nomeFile(j,"CV"));
+    if(p.cover_letter)setTimeout(()=>scarica(pdfBlob("Lettera",p.cover_letter),nomeFile(j,"Lettera")),700);
+    toast("PDF generati.");}));
+  box.querySelectorAll("button[data-gmail]").forEach(b=>b.addEventListener("click",async()=>{
+    if(!gOk()){ toast("Collego Google, poi riprendo da solo…"); gAuthStart({a:"gmail",i:+b.dataset.gmail}); return; }
+    const j=store().jobs[+b.dataset.gmail];
+    b.disabled=true; b.textContent="Creo la bozza…";
+    try{ await gmailDraft(j);
+      if(j.stato==="DA CONTATTARE"){j.stato="INVIATA";j.sentAt=Date.now();j.followUpAt=j.sentAt+3*864e5;store.write();}
+      toast("Bozza creata in Gmail con gli allegati."); renderRank();
+    }catch(e){ toast(e.message,true); b.disabled=false; b.textContent="Bozza Gmail con allegati"; }}));
+  box.querySelectorAll("button[data-drive]").forEach(b=>b.addEventListener("click",async()=>{
+    if(!gOk()){ toast("Collego Google, poi riprendo da solo…"); gAuthStart({a:"drive",i:+b.dataset.drive}); return; }
+    const j=store().jobs[+b.dataset.drive];
+    b.disabled=true; b.textContent="Carico…";
+    try{ const k=await driveSave(j); toast(k+" file salvati su Drive."); }
+    catch(e){ toast(e.message,true); }
+    finally{ b.disabled=false; b.textContent="Salva su Drive"; }}));
+  box.querySelectorAll("button[data-cal]").forEach(b=>b.addEventListener("click",async()=>{
+    if(!gOk()){ toast("Collego Google, poi riprendo da solo…"); gAuthStart({a:"cal",i:+b.dataset.cal}); return; }
+    const j=store().jobs[+b.dataset.cal];
+    const q=prompt("Data e ora del colloquio (AAAA-MM-GG HH:MM)",
+      new Date(Date.now()+864e5).toISOString().slice(0,10)+" 10:00");
+    if(!q)return;
+    try{ await calEvent(j,q.trim().replace(" ","T"));
+      j.stato="COLLOQUIO"; store.write(); renderRank(); toast("Colloquio aggiunto al calendario.");
+    }catch(e){ toast(e.message,true); }}));
 }
 async function copy(txt,what){
   try{await navigator.clipboard.writeText(txt);toast(what+" copiata.");}
@@ -775,7 +1135,12 @@ function packetHtml(i,j){
     '<div class="btnrow"><button class="act ghost small" data-copy="letter" data-i="'+i+'">Copia lettera</button></div>'+
     '<h2>CV adattato</h2><pre class="doc">'+esc(p.cv||"")+'</pre>'+
     '<div class="btnrow"><button class="act ghost small" data-copy="cv" data-i="'+i+'">Copia CV</button>'+
-    '<button class="act ghost small" data-print="1">Salva PDF</button></div>';
+    '<button class="act ghost small" data-pdf="'+i+'">Scarica i PDF</button></div>'+
+    '<h2>Google</h2><div class="btnrow">'+
+    '<button class="act ghost small" data-gmail="'+i+'">Bozza Gmail con allegati</button>'+
+    '<button class="act ghost small" data-drive="'+i+'">Salva su Drive</button></div>'+
+    '<div class="btnrow"><button class="act ghost small" data-cal="'+i+'">Colloquio in calendario</button></div>'+
+    '<p class="note">La bozza Gmail contiene CV e lettera come PDF veri. Resta una bozza: l\'invio lo fai tu.</p>';
 }
 async function makePacket(i){
   const d=store(), j=d.jobs[i];
@@ -828,6 +1193,35 @@ $("btnImport").addEventListener("click",()=>{
 });
 
 /* ---------- preferenze e impostazioni ---------- */
+$("btnFormazione").addEventListener("click",async()=>{
+  const d=store(), g=gapStats();
+  if(!g.length){toast("Servono annunci analizzati con requisiti scoperti.",true);return;}
+  const btn=$("btnFormazione"); btn.disabled=true; busy($("formazioneBox"),"Valuto la formazione utile…");
+  try{
+    const badge=d.badge.facts.filter(f=>f.origine!=="DEDOTTO");
+    const out=parseJson(await llm(pFormazione(g,badge,d.prefs)));
+    const idx={}; g.forEach(x=>idx[norm(x.req)]=x);
+    const gruppi=(out.gruppi||[]).map(gr=>{
+      let ann=0, sc=0;
+      (gr.requisiti||[]).forEach(r=>{const x=idx[norm(r)]; if(x){ann+=x.tot; sc+=x.mancanti;}});
+      return Object.assign({},gr,{annunci:ann,scoperti:sc});
+    }).filter(gr=>gr.annunci>0).sort((a,b)=>b.annunci-a.annunci);
+    let h="";
+    if(!gruppi.length)h='<div class="warnbox">Il modello non ha collegato nessun tema ai requisiti reali. Riprova.</div>';
+    else h='<div class="card">'+gruppi.map(gr=>
+      '<div class="gapline" style="padding:12px 0"><b>'+esc(gr.tema)+'</b>'+
+      ' <span style="font-family:var(--mono);font-size:13px;color:var(--accent)">'+gr.annunci+' richieste</span><br>'+
+      esc(gr.azione)+'<br><span style="color:var(--muted);font-size:13px">'+
+      esc(gr.tipo||"")+' · '+esc(gr.tempo||"")+' · costo '+esc(gr.costo||"non noto")+' · '+esc(gr.dove||"")+'</span></div>').join("")+'</div>';
+    if((out.non_vale_la_pena||[]).length)
+      h+='<h2>Su cui non conviene investire</h2><div class="card">'+
+        out.non_vale_la_pena.map(x=>'<div class="gapline">'+esc(x)+'</div>').join("")+'</div>';
+    h+='<p class="note">Il numero di richieste è contato sui tuoi annunci. Il resto è una proposta del modello: nessun nome di scuola è inventato perché non gliel\'ho permesso.</p>';
+    $("formazioneBox").innerHTML=h;
+  }catch(e){ clear($("formazioneBox")); toast(e.message||"Analisi fallita.",true); }
+  finally{ btn.disabled=false; }
+});
+
 $("btnSaveProf").addEventListener("click",()=>{
   const d=store();
   d.prefs={targets:$("pTargets").value,where:$("pWhere").value,constraints:$("pConstraints").value,
@@ -870,6 +1264,44 @@ $("btnModels").addEventListener("click",async()=>{
   }catch(e){clear($("setMsg"));toast(e.message,true);}
 });
 
+$("btnGConnect").addEventListener("click",()=>{
+  if(gOk()){toast("Già collegato.");return;}
+  gAuthStart(null);
+});
+$("btnGManual").addEventListener("click",()=>{
+  const u=gAuthUrl(null);
+  const box=$("gDiagBox");
+  box.innerHTML='<div class="card"><b>Indirizzo di autorizzazione</b>'+
+    '<p class="note" style="word-break:break-all;background:var(--ink);padding:12px;border-radius:3px;font-family:var(--mono);font-size:12px;margin-top:8px">'+
+    esc(u)+'</p></div>'+
+    '<div class="btnrow"><button class="act ghost small" id="btnCopyAuth">Copia l\'indirizzo</button>'+
+    '<a class="act ghost small" style="text-align:center;line-height:24px;text-decoration:none" href="'+esc(u)+'" target="_blank" rel="noopener">Apri in una scheda</a></div>'+
+    '<p class="note">Se il reindirizzamento automatico non parte, copia questo indirizzo e aprilo a mano. '+
+    'Dopo l\'autorizzazione tornerai su AiJob e il token verrà raccolto da solo.</p>';
+  const b=$("btnCopyAuth");
+  if(b)b.addEventListener("click",()=>copy(u,"Indirizzo di autorizzazione"));
+});
+
+$("btnGDiag").addEventListener("click",async()=>{
+  busy($("gDiagBox"),"Verifica in corso…");
+  const r=await gDiag();
+  $("gDiagBox").innerHTML='<div class="card">'+r.map(x=>
+    '<div class="kv"><b>'+esc(x[0])+'</b><span style="color:'+
+    (x[2]==="err"?"var(--signal)":x[2]==="ok"?"var(--ok)":"var(--muted)")+'">'+esc(x[1])+'</span></div>').join("")+
+    '</div><p class="note">Ogni riga rossa è una causa. Se il protocollo non è https o l\'indirizzo attuale '+
+    'non coincide con il ritorno registrato, hai aperto il file dai download invece del sito. Se accounts.google.com '+
+    'risulta bloccata, è lo scudo del browser: in Brave disattiva gli Scudi per questo sito. '+
+    'Se "Dentro una cornice" è sì, stai guardando un\'anteprima: apri il sito nel browser.</p>';
+});
+
+$("btnGOff").addEventListener("click",()=>{
+  const t=gToken();
+  if(t){ const f=document.createElement("form"); f.method="post"; f.target="_blank";
+    f.action="https://oauth2.googleapis.com/revoke?token="+encodeURIComponent(t);
+    document.body.appendChild(f); try{f.submit();}catch(e){} f.remove(); }
+  SS.del("g.tok"); SS.del("g.exp"); gRender(); toast("Scollegato.");
+});
+
 function loadForms(){
   const d=store();
   $("cvRaw").value=d.badge.cv||"";
@@ -880,7 +1312,35 @@ function loadForms(){
   $("sModel").value=d.settings.model||"gemini-3.6-flash";$("sBase").value=d.settings.base||"";
   $("baseWrap").hidden=($("sProv").value==="gemini");
 }
-loadForms(); renderBadge(); renderRank(); renderSearch(); renderPresets(); checkBadge();
+loadForms(); renderBadge(); renderRank(); renderSearch(); renderPresets(); checkBadge(); gRender(); renderGap(); gWarn();
+
+(function(){
+  const r=gHandleReturn();
+  if(!r)return;
+  gRender();
+  if(r.err){
+    const m={access_denied:"Hai negato l'autorizzazione.",
+      state_mismatch:"Controllo di sicurezza fallito: riprova dalla scheda Chiave.",
+      no_token:"Google non ha restituito il token.",
+      redirect_uri_mismatch:"L'indirizzo di ritorno non corrisponde a quello registrato in Google Cloud."};
+    toast(m[r.err]||("Google: "+r.err),true);
+    document.querySelector('nav.tabs button[data-v="set"]').click();
+    return;
+  }
+  toast("Google collegato.");
+  const p=r.pending;
+  if(!p){ document.querySelector('nav.tabs button[data-v="set"]').click(); return; }
+  document.querySelector('nav.tabs button[data-v="rank"]').click();
+  setTimeout(()=>{
+    const b=document.querySelector('button[data-why="'+p.i+'"]');
+    if(b)toggleDetail(p.i,b);
+    setTimeout(()=>{
+      const sel={gmail:'button[data-gmail="'+p.i+'"]',drive:'button[data-drive="'+p.i+'"]',cal:'button[data-cal="'+p.i+'"]'}[p.a];
+      const x=sel&&document.querySelector(sel);
+      if(x){ try{x.scrollIntoView({block:"center"});}catch(e){} x.click(); }
+    },300);
+  },300);
+})();
 </script>
 </body>
 </html>
