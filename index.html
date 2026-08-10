@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#12161c">
-<title>AiJob 0.13.1</title>
+<meta name="theme-color" content="#06070a">
+<title>AiJob 0.14.0</title>
 <style>
 :root{
-  --ink:#12161c; --ink-2:#1c232d; --paper:#f2efe9; --muted:#8b95a3;
+  --ink:#06070a; --ink-2:#101419; --paper:#f2efe9; --muted:#8b95a3;
   --line:#57667a; --signal:#dd6464; --ok:#38997d; --warn:#b2842a; --accent:#c9d8e8;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
   --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -72,7 +72,7 @@ button.small{padding:10px 12px;font-size:14px;min-height:44px}
 .detail.on{display:block}
 
 .ledger{margin:0}
-.ev{display:grid;grid-template-columns:3px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid #2a3341}
+.ev{display:grid;grid-template-columns:3px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid #1e2530}
 .ev:last-child{border-bottom:0}
 .ev .bar{border-radius:2px;align-self:stretch;background:var(--muted)}
 .ev[data-s="SUPPORTED"] .bar{background:var(--ok)}
@@ -89,18 +89,18 @@ button.small{padding:10px 12px;font-size:14px;min-height:44px}
 .dims{margin:12px 0}
 .dim{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px}
 .dim .lb{flex:0 0 118px;color:var(--muted);font-size:13px}
-.dim .tr{flex:1;height:8px;background:#2a3341;border-radius:4px;overflow:hidden}
+.dim .tr{flex:1;height:8px;background:#1e2530;border-radius:4px;overflow:hidden}
 .dim .fl{height:100%;background:var(--accent);border-radius:4px}
 .dim .vv{flex:0 0 40px;text-align:right;font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
 .flag{border-left:3px solid var(--signal);padding:9px 0 9px 12px;margin:8px 0;font-size:14px;background:#1e1417}
-.gapline{font-size:14px;padding:7px 0;border-bottom:1px solid #2a3341}
-.kv{font-size:14px;padding:7px 0;border-bottom:1px solid #2a3341;display:flex;gap:10px}
+.gapline{font-size:14px;padding:7px 0;border-bottom:1px solid #1e2530}
+.kv{font-size:14px;padding:7px 0;border-bottom:1px solid #1e2530;display:flex;gap:10px}
 .kv b{color:var(--muted);font-weight:600;min-width:104px;font-size:13px}
 pre.doc{white-space:pre-wrap;word-wrap:break-word;font-family:var(--sans);font-size:16px;max-width:66ch;
   background:var(--paper);color:var(--ink);padding:16px;border-radius:3px;margin:0;line-height:1.65}
 
 /* --- AiBadge --- */
-.fact{display:grid;grid-template-columns:3px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid #2a3341}
+.fact{display:grid;grid-template-columns:3px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid #1e2530}
 .fact:last-child{border-bottom:0}
 .fact .bar{border-radius:2px;align-self:stretch}
 .fact[data-o="DOCUMENTO"] .bar{background:var(--ok)}
@@ -145,7 +145,7 @@ pre.doc{white-space:pre-wrap;word-wrap:break-word;font-family:var(--sans);font-s
 .azione button{margin-top:11px;background:none;border:1px solid var(--line);color:var(--paper);
   border-radius:3px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px;width:100%}
 .nulla{color:var(--muted);font-size:15px;padding:14px 0}
-.passo{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #2a3341;align-items:start}
+.passo{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #1e2530;align-items:start}
 .passo:last-child{border-bottom:0}
 .passo .n{font-family:var(--mono);font-size:14px;color:var(--muted);padding-top:1px}
 .passo .n.fatto{color:var(--ok)}
@@ -172,7 +172,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><h1>AiJob</h1><span class="ver">0.13.1</span><span class="dot" id="storeState">local</span></div>
+    <div class="brand"><h1>AiJob</h1><span class="ver">0.14.0</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="oggi" aria-selected="true">Oggi</button>
       <button role="tab" data-v="add" aria-selected="false">Annuncio</button>
@@ -759,11 +759,27 @@ function err429(body){
 }
 
 /* ---------- ricerca reale: Gemini con ricerca Google ---------- */
-function erroreRete(e,nome){
-  // fetch fallita senza risposta = rete assente oppure il provider non consente chiamate dal browser
+function diagHttp(status,body,nome,cfg){
+  const b=String(body||"");
+  let e;
+  if(status===401) e=new Error(nome+": chiave rifiutata. Controlla di averla copiata per intero, senza spazi.");
+  else if(status===402) e=new Error(nome+": credito esaurito. Ricarica, oppure scegli un modello che finisce con :free.");
+  else if(status===403) e=new Error(nome+": accesso negato a questo modello con la tua chiave.");
+  else if(status===404&&/data policy|endpoints found/i.test(b))
+    e=new Error(nome+': il modello "'+((cfg&&cfg.model)||"")+'" è escluso dalle tue impostazioni privacy. '+
+      "Per i modelli gratuiti servono i permessi di training: openrouter.ai/settings/privacy");
+  else if(status===404) e=new Error(nome+': il modello "'+((cfg&&cfg.model)||"")+'" non esiste. Controlla il nome esatto.');
+  else if(status===429){ e=new Error(nome+": limite di richieste raggiunto."); e.quota=true; }
+  else if(status>=500) e=new Error(nome+": il servizio non risponde ("+status+"). Riprova fra poco.");
+  else e=new Error(nome+" "+status+": "+b.slice(0,200));
+  return e;
+}
+function erroreRete(e,nome,id){
+  if(id&&PROVIDER[id]&&PROVIDER[id].browser===false)
+    return new Error(nome+" non accetta richieste da una pagina web: è una sua scelta, non un difetto di AiJob. "+
+      "Gli stessi modelli sono raggiungibili tramite OpenRouter.");
   return new Error(nome+": il browser non è riuscito a contattare il servizio. "+
-    "O manca la rete, oppure questo provider non accetta richieste dirette da una pagina web (CORS). "+
-    "Provane un altro dalla scheda Agenti.");
+    "O manca la rete, oppure il servizio rifiuta le chiamate dirette da una pagina web.");
 }
 function queryRicerca(prefs){
   const ruoli=(prefs.targets||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean).slice(0,3);
@@ -903,12 +919,13 @@ const PROVIDER={
   gemini:{nome:"Google Gemini", tipo:"gemini", ragiona:true, cerca:"grounding",
     modello:"gemini-3.6-flash", console:"https://aistudio.google.com/app/apikey",
     nota:"gratis con limiti giornalieri"},
-  openai:{nome:"OpenAI", tipo:"openai", ragiona:true, cerca:false,
+  openai:{nome:"OpenAI", tipo:"openai", ragiona:true, cerca:false, browser:false,
     base:"https://api.openai.com/v1", modello:"gpt-4o-mini",
-    console:"https://platform.openai.com/api-keys", nota:"a consumo"},
+    console:"https://platform.openai.com/api-keys",
+    nota:"non chiamabile da una pagina web: usalo tramite OpenRouter"},
   openrouter:{nome:"OpenRouter", tipo:"openai", ragiona:true, cerca:"online",
     base:"https://openrouter.ai/api/v1", modello:"google/gemini-2.5-flash",
-    console:"https://openrouter.ai/keys", nota:"molti modelli con una chiave sola"},
+    console:"https://openrouter.ai/keys", nota:"molti modelli con una chiave sola; i modelli :free richiedono un'impostazione privacy"},
   groq:{nome:"Groq", tipo:"openai", ragiona:true, cerca:false,
     base:"https://api.groq.com/openai/v1", modello:"llama-3.3-70b-versatile",
     console:"https://console.groq.com/keys", nota:"veloce, piano gratuito"},
@@ -928,8 +945,8 @@ const ORDINE_CERCA=["tavily","perplexity","openrouter","gemini"];
 
 function ag(){ const d=store(); if(!d.agenti)d.agenti={}; return d.agenti; }
 function agCfg(id){ const a=ag()[id]||{}; const P=PROVIDER[id]||{};
-  return {key:(a.key||"").trim(), model:(a.model||"").trim()||P.modello||"", base:(a.base||"").trim()||P.base||""}; }
-function agPronto(id){ return !!agCfg(id).key && (PROVIDER[id].tipo!=="openai"||!!agCfg(id).base); }
+  return {_id:id, key:(a.key||"").trim(), model:(a.model||"").trim()||P.modello||"", base:(a.base||"").trim()||P.base||""}; }
+function agPronto(id){ return !!agCfg(id).key && PROVIDER[id].browser!==false && (PROVIDER[id].tipo!=="openai"||!!agCfg(id).base); }
 function catena(ruolo){
   const d=store(), pref=(d.primario||{})[ruolo];
   const ordine=(ruolo==="ricerca"?ORDINE_CERCA:ORDINE_RAGIONA).filter(id=>{
@@ -962,21 +979,21 @@ async function chiamaGemini(prompt,cfg,conRicerca){
   return {txt:t, fonti:(gm.groundingChunks||[]).map(x=>x.web||{}).filter(w=>w.uri), query:gm.webSearchQueries||[]};
 }
 async function chiamaOpenAI(prompt,cfg,nome,jsonMode){
+  const intestazioni={"Content-Type":"application/json","Authorization":"Bearer "+cfg.key};
+  if((cfg.base||"").indexOf("openrouter")>=0){
+    intestazioni["HTTP-Referer"]=location.origin; intestazioni["X-Title"]="AiJob";
+  }
   const base=(cfg.base||"").replace(/\/+$/,"");
   if(!base) throw new Error(nome+": indirizzo del servizio non configurato.");
   const body={model:cfg.model,messages:[{role:"user",content:prompt}]};
   if(jsonMode) body.response_format={type:"json_object"};
   let r;
   try{ r=await fetch(base+"/chat/completions",{method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},
-    body:JSON.stringify(body)}); }
-  catch(e){ throw erroreRete(e,nome); }
-  if(!r.ok){ const b=(await r.text()).slice(0,400);
-    if(r.status===429){ const e=new Error(nome+": limite di richieste raggiunto."); e.quota=true; throw e; }
-    if(r.status===401||r.status===403) throw new Error(nome+": chiave non valida o senza credito.");
-    if(r.status===400&&jsonMode){ // alcuni modelli non accettano il formato JSON forzato
-      return chiamaOpenAI(prompt,cfg,nome,false); }
-    throw new Error(nome+" "+r.status+": "+b); }
+    headers:intestazioni, body:JSON.stringify(body)}); }
+  catch(e){ throw erroreRete(e,nome,cfg&&cfg._id); }
+  if(!r.ok){ const b=(await r.text()).slice(0,500);
+    if(r.status===400&&jsonMode) return chiamaOpenAI(prompt,cfg,nome,false);
+    throw diagHttp(r.status,b,nome,cfg); }
   const j=await r.json(), msg=((j.choices||[])[0]||{}).message||{};
   if(!msg.content) throw new Error(nome+": risposta vuota.");
   const cit=[];
@@ -1167,12 +1184,12 @@ function renderMappa(){
   $("mapBox").innerHTML=MAPPA.map(g=>
     '<details'+(g[2]?' open':'')+' style="border:1px solid var(--line);border-radius:3px;padding:12px;margin-bottom:10px;background:var(--ink-2)">'+
     '<summary style="font-weight:600;cursor:pointer;font-size:15px">'+esc(g[0])+'</summary>'+
-    g[1].map(m=>'<div style="padding:8px 0;border-bottom:1px solid #2a3341"><b style="font-size:14px">'+esc(m[0])+
+    g[1].map(m=>'<div style="padding:8px 0;border-bottom:1px solid #1e2530"><b style="font-size:14px">'+esc(m[0])+
       '</b><div style="color:var(--muted);font-size:13px;margin-top:2px">'+esc(m[1])+'</div></div>').join("")+
     '</details>').join("");
   const d=store();
   $("verBox").innerHTML=
-    '<div class="kv"><b>Versione</b><span>0.13.1</span></div>'+
+    '<div class="kv"><b>Versione</b><span>0.14.0</span></div>'+
     '<div class="kv"><b>Annunci</b><span>'+d.jobs.length+'</span></div>'+
     '<div class="kv"><b>Fatti nel badge</b><span>'+d.badge.facts.length+'</span></div>'+
     '<div class="kv"><b>Ragionamento</b><span>'+esc(catena("ragionamento").map(x=>PROVIDER[x].nome).join(" → ")||"nessuno")+'</span></div>'+
@@ -1987,7 +2004,7 @@ async function awStateWrite(){
     }
   }catch(e){}
   stato.moduli.AiJob={
-    versione:"0.13.1", aggiornato:new Date().toISOString(),
+    versione:"0.14.0", aggiornato:new Date().toISOString(),
     annunci:d.jobs.length, in_attesa:b.attesa, colloqui:b.colloqui,
     azioni_aperte:b.azioni.length, fatti_badge:d.badge.facts.length,
     url:"https://robertonarcisojr.github.io/AiJob/"
@@ -2024,7 +2041,7 @@ $("btnAwState").addEventListener("click",async()=>{
     const ks=Object.keys(m);
     $("awStateBox").innerHTML=ks.length?'<div class="card">'+ks.map(k=>{
       const x=m[k]||{};
-      return '<div style="padding:10px 0;border-bottom:1px solid #2a3341"><b style="font-size:15px">'+esc(k)+
+      return '<div style="padding:10px 0;border-bottom:1px solid #1e2530"><b style="font-size:15px">'+esc(k)+
         '</b> <span style="font-family:var(--mono);font-size:13px;color:var(--muted)">'+esc(x.versione||"")+'</span>'+
         '<div style="font-size:13px;color:var(--muted);margin-top:3px">aggiornato '+
         esc(x.aggiornato?new Date(x.aggiornato).toLocaleString("it-CH"):"—")+'</div>'+
