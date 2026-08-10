@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#12161c">
-<title>AiJob 0.9.0</title>
+<title>AiJob 0.9.2</title>
 <style>
 :root{
   --ink:#12161c; --ink-2:#1c232d; --paper:#f2efe9; --muted:#8b95a3;
@@ -155,12 +155,13 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><h1>AiJob</h1><span class="ver">0.9.0</span><span class="dot" id="storeState">local</span></div>
+    <div class="brand"><h1>AiJob</h1><span class="ver">0.9.2</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="add" aria-selected="true">Annuncio</button>
       <button role="tab" data-v="rank" aria-selected="false">AiSearch</button>
       <button role="tab" data-v="badge" aria-selected="false">AiBadge</button>
       <button role="tab" data-v="set" aria-selected="false">Chiave</button>
+      <button role="tab" data-v="info" aria-selected="false">Info</button>
     </nav>
   </div>
 </header>
@@ -181,11 +182,11 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 <!-- ========== CLASSIFICA ========== -->
 <section class="view" id="v-rank">
   <div class="card">
-    <h2 style="margin-top:0">Cerca annunci per il tuo AiBadge</h2>
+    <h2 style="margin-top:0">Trova opportunità</h2>
     <p class="hint" id="qPreview">Costruisci prima l'AiBadge.</p>
     <div class="btnrow"><button class="act small" id="btnSearch">Apri le ricerche</button>
       <button class="act ghost small" id="btnCopyQ">Copia i termini</button></div>
-    <div class="btnrow"><button class="act small" id="btnSearchReal">Cerca davvero in rete</button></div>
+    <div class="btnrow"><button class="act small" id="btnSearchReal">Cerca opportunità</button></div>
     <div id="realResults" role="status" aria-live="polite"></div>
     <div class="chips" id="presetChips"></div>
     <div id="searchLinks"></div>
@@ -222,6 +223,13 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
     <p class="hint" id="badgeAsk"></p>
     <div class="card ledger" id="factList"></div>
   </div>
+
+  <h2>Prova ATS</h2>
+  <p class="hint">Simula come cinque famiglie di software di selezione leggono il tuo CV. Regole deterministiche, nessuna chiamata AI.</p>
+  <div class="field"><label for="atsJob">Annuncio di riferimento (facoltativo)</label>
+    <textarea id="atsJob" placeholder="Incolla un annuncio per confrontare le parole chiave…" style="min-height:90px"></textarea></div>
+  <div class="btnrow"><button class="act ghost small" id="btnAts">Esegui la prova</button></div>
+  <div id="atsOut"></div>
 
   <h2>Cosa ti chiede il mercato</h2>
   <p class="hint" id="gapHint">Analizza almeno un annuncio: qui compaiono i requisiti che ricorrono e che il tuo badge non sostiene.</p>
@@ -278,6 +286,23 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
   </div>
   <div id="setMsg" role="status" aria-live="polite"></div>
   <hr class="sep">
+  <h2>Motore della ricerca</h2>
+  <p class="hint">Chi cerca gli annunci in rete. Se la quota Gemini si esaurisce, AiJob passa a questo motore da solo.</p>
+  <div class="field"><label for="rProv">Provider di ricerca</label>
+    <select id="rProv">
+      <option value="gemini">Gemini (usa la chiave qui sopra)</option>
+      <option value="perplexity">Perplexity Sonar</option>
+      <option value="openrouter">OpenRouter</option>
+    </select></div>
+  <div class="field" id="rKeyWrap" hidden><label for="rKey">Chiave del motore di ricerca</label>
+    <input type="password" id="rKey" autocomplete="off" placeholder="incolla la chiave"></div>
+  <div class="field" id="rModelWrap" hidden><label for="rModel">Modello</label>
+    <input type="text" id="rModel" list="rModelList" placeholder="sonar">
+    <datalist id="rModelList"><option value="sonar"><option value="sonar-pro"><option value="perplexity/sonar"><option value="openai/gpt-4o-mini:online"></datalist></div>
+  <button class="act ghost small" id="btnSaveSearch">Salva motore di ricerca</button>
+  <p class="note">Perplexity Sonar e OpenRouter cercano davvero nel web e usano lo stesso formato di richiesta. Su OpenRouter aggiungi <code>:online</code> al nome del modello per attivare la ricerca.</p>
+
+  <hr class="sep">
   <h2>Google</h2>
   <div id="gBlockBox"></div>
   <p class="hint" id="gState">Non collegato.</p>
@@ -302,6 +327,13 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
   </div>
 </section>
 
+<section class="view" id="v-info">
+  <h2>Mappa AiWorld</h2>
+  <p class="hint">Dove si colloca AiJob nell'ecosistema. AiSecretary non sta dentro un dominio: li attraversa.</p>
+  <div id="mapBox"></div>
+  <h2>Questa versione</h2>
+  <div class="card" id="verBox"></div>
+</section>
 </main>
 
 <script>
@@ -310,7 +342,8 @@ const KEY="aijob.v2";
 let mem=null;
 function seed(){return{badge:{cv:"",facts:[],builtAt:null},
   prefs:{targets:"",where:"",constraints:"",salary:"",goal:"assunzione",stand:""},
-  settings:{provider:"gemini",key:"",model:"gemini-3.6-flash",base:""},jobs:[]};}
+  settings:{provider:"gemini",key:"",model:"gemini-3.6-flash",base:""},
+  ricerca:{provider:"gemini",key:"",model:""},jobs:[]};}
 function store(){
   if(mem)return mem;
   try{const r=localStorage.getItem(KEY);mem=r?JSON.parse(r):seed();}
@@ -318,6 +351,7 @@ function store(){
   const s=seed();
   if(!mem.badge)mem.badge=s.badge; if(!Array.isArray(mem.badge.facts))mem.badge.facts=[];
   if(!mem.prefs)mem.prefs=s.prefs; if(!mem.settings)mem.settings=s.settings;
+  if(!mem.ricerca)mem.ricerca=s.ricerca;
   if(!Array.isArray(mem.jobs))mem.jobs=[];
   return mem;
 }
@@ -344,6 +378,7 @@ document.querySelectorAll("nav.tabs button").forEach(b=>{
     $("v-"+b.dataset.v).classList.add("on");
     if(b.dataset.v==="rank"){renderRank();renderSearch();renderPresets();}
     if(b.dataset.v==="badge"){renderBadge();renderGap();}
+    if(b.dataset.v==="info")renderMappa();
     if(b.dataset.v==="add")checkBadge();
     window.scrollTo(0,0);
   });
@@ -692,10 +727,44 @@ function err429(body){
 }
 
 /* ---------- ricerca reale: Gemini con ricerca Google ---------- */
+const MOTORI={
+  perplexity:{base:"https://api.perplexity.ai", modello:"sonar", nome:"Perplexity Sonar"},
+  openrouter:{base:"https://openrouter.ai/api/v1", modello:"perplexity/sonar", nome:"OpenRouter"}
+};
+async function cercaCompatibile(prompt,cfg){
+  const M=MOTORI[cfg.provider];
+  if(!M) throw new Error("Motore di ricerca non riconosciuto.");
+  if(!cfg.key) throw new Error("Manca la chiave di "+M.nome+" nella scheda Chiave.");
+  const r=await fetch(M.base+"/chat/completions",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},
+    body:JSON.stringify({model:cfg.model||M.modello,messages:[{role:"user",content:prompt}]})});
+  if(!r.ok){ const b=(await r.text()).slice(0,400);
+    if(r.status===429){ const e=new Error(M.nome+": quota esaurita."); e.quota=true; throw e; }
+    if(r.status===401) throw new Error(M.nome+": chiave non valida.");
+    throw new Error(M.nome+" "+r.status+": "+b); }
+  const j=await r.json();
+  const msg=((j.choices||[])[0]||{}).message||{};
+  const cit=[];
+  (msg.annotations||[]).forEach(a=>{ const u=a&&a.url_citation; if(u&&(u.url||u.uri)) cit.push({uri:u.url||u.uri,title:u.title||""}); });
+  (j.citations||[]).forEach(u=>{ if(typeof u==="string") cit.push({uri:u,title:""}); });
+  return {txt:msg.content||"", motore:M.nome, fonti:cit, query:[]};
+}
 async function llmSearch(prompt){
+  const cfg=store().ricerca||{provider:"gemini"};
+  if(cfg.provider&&cfg.provider!=="gemini") return cercaCompatibile(prompt,cfg);
+  try{ return await cercaGemini(prompt); }
+  catch(e){
+    if(e.quota&&cfg.key&&MOTORI[cfg.provider]){
+      toast("Quota Gemini esaurita: passo a "+MOTORI[cfg.provider].nome+".");
+      return cercaCompatibile(prompt,cfg);
+    }
+    if(e.quota) e.message+=" Configura Perplexity o OpenRouter come motore alternativo nella scheda Chiave. Nota: chiavi diverse dello stesso progetto Google condividono la stessa quota, quindi cambiare chiave non serve.";
+    throw e;
+  }
+}
+async function cercaGemini(prompt){
   const s=store().settings;
-  if(s.provider!=="gemini") throw new Error("La ricerca in rete richiede il provider Google Gemini.");
-  if(!s.key) throw new Error("Manca la chiave API nella scheda Chiave.");
+  if(!s.key) throw new Error("Manca la chiave Gemini nella scheda Chiave.");
   const m=s.model||"gemini-3.6-flash";
   const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(m)+
     ":generateContent?key="+encodeURIComponent(s.key),
@@ -704,14 +773,15 @@ async function llmSearch(prompt){
       tools:[{google_search:{}}],
       generationConfig:{maxOutputTokens:8192}})});
   if(!r.ok){ const b=(await r.text()).slice(0,600);
-    if(r.status===429) throw new Error(err429(b));
-    if(r.status===400&&/tool|search/i.test(b)) throw new Error("Il modello scelto non supporta la ricerca. Prova gemini-3.6-flash.");
+    if(r.status===429){ const e=new Error(err429(b)); e.quota=true; throw e; }
+    if(r.status===403){ const e=new Error("Gemini ha rifiutato la ricerca: sul piano gratuito la ricerca con Google non è sempre disponibile."); e.quota=true; throw e; }
+    if(r.status===400&&/tool|search/i.test(b)) throw new Error("Questo modello non supporta la ricerca. Prova gemini-3.6-flash.");
     throw new Error("Gemini "+r.status+": "+b); }
   const j=await r.json();
   const c=(j.candidates||[])[0]||{};
-  const txt=((c.content||{}).parts||[]).map(p=>p.text||"").join("");
   const gm=c.groundingMetadata||{};
-  return {txt:txt, fonti:(gm.groundingChunks||[]).map(x=>x.web||{}).filter(w=>w.uri), query:gm.webSearchQueries||[]};
+  return {txt:((c.content||{}).parts||[]).map(p=>p.text||"").join(""), motore:"Gemini",
+    fonti:(gm.groundingChunks||[]).map(x=>x.web||{}).filter(w=>w.uri), query:gm.webSearchQueries||[]};
 }
 function pRicerca(prefs,badge){
   return `Cerca offerte di lavoro REALMENTE PUBBLICATE e ancora aperte.
@@ -802,6 +872,146 @@ CV:
 `+cv.replace(/>>>/g,"> > >")+`
 CV
 Fine del testo. Applica le REGOLE ASSOLUTE.`;
+}
+
+/* ---------- mappa AiWorld ---------- */
+const MAPPA=[
+ ["Strato cognitivo",[
+   ["AiLanguage","intenti, compressione semantica, protocollo comune"],
+   ["AiWorld Core","governance, memoria, policy, evidenze, regole anti-invenzione"],
+   ["AiAgents","registro dei provider: Gemini, Perplexity, OpenRouter, altri"]],true],
+ ["AiSecretary — attraversa i domini",[
+   ["Osserva","posta, calendario, scadenze, nuove opportunità"],
+   ["Decide","priorità, urgenza, cosa merita il tuo tempo"],
+   ["Prepara","dossier, documenti, messaggi, eventi"],
+   ["Chiede","Human Gate su tutto ciò che è irreversibile"],
+   ["Ricorda","memoria operativa per azienda e candidatura"]],true],
+ ["AiWork — dominio professionale",[
+   ["AiJob","ricerca, candidature, tracciamento, follow-up — questa app"],
+   ["AiBadge","profilo, fatti immutabili, evidenze"],
+   ["AiSearch","radar delle opportunità: ricerca, deduplica, freschezza, rischio"],
+   ["AiCV","salute del CV, adattamento verificabile, prova ATS"],
+   ["AiApply","pacchetto candidatura e invio con approvazione"],
+   ["AiCareer","lacune di competenza e percorsi di crescita"]],true],
+ ["AiLife — dominio personale",[
+   ["AiEvents","eventi, viaggi, spese condivise"],
+   ["AiWelfare","salute e abitudini"],
+   ["AiOptima","spese e consumi"],
+   ["AiSocial","relazioni e ricorrenze"]],false],
+ ["Connettori",[
+   ["Google Workspace","Gmail, Drive, Calendar, Documenti — dati, non cervello"],
+   ["BrowserCapability","astrazione apri/leggi/compila per una futura estensione"]],false],
+ ["Principi",[
+   ["AiFold","complessità alta dentro, bassa fuori"],
+   ["Human Gate","nessuna barriera sulle azioni innocue, approvazione su quelle irreversibili"],
+   ["Evidenza ≠ affermazione","ogni frase nei documenti deve avere un fatto che la sostiene"]],false]
+];
+function renderMappa(){
+  $("mapBox").innerHTML=MAPPA.map(g=>
+    '<details'+(g[2]?' open':'')+' style="border:1px solid var(--line);border-radius:3px;padding:12px;margin-bottom:10px;background:var(--ink-2)">'+
+    '<summary style="font-weight:600;cursor:pointer;font-size:15px">'+esc(g[0])+'</summary>'+
+    g[1].map(m=>'<div style="padding:8px 0;border-bottom:1px solid #2a3341"><b style="font-size:14px">'+esc(m[0])+
+      '</b><div style="color:var(--muted);font-size:13px;margin-top:2px">'+esc(m[1])+'</div></div>').join("")+
+    '</details>').join("");
+  const d=store();
+  $("verBox").innerHTML=
+    '<div class="kv"><b>Versione</b><span>0.9.2</span></div>'+
+    '<div class="kv"><b>Annunci</b><span>'+d.jobs.length+'</span></div>'+
+    '<div class="kv"><b>Fatti nel badge</b><span>'+d.badge.facts.length+'</span></div>'+
+    '<div class="kv"><b>Motore analisi</b><span>'+esc(d.settings.provider+" · "+(d.settings.model||"—"))+'</span></div>'+
+    '<div class="kv"><b>Motore ricerca</b><span>'+esc((d.ricerca&&d.ricerca.provider)||"gemini")+'</span></div>'+
+    '<div class="kv"><b>Google</b><span>'+(gOk()?"collegato":"non collegato")+'</span></div>'+
+    '<div class="kv"><b>Ricerche oggi</b><span>'+esc(sbStato())+'</span></div>';
+}
+
+/* ---------- Prova ATS: regole deterministiche, nessuna chiamata AI ---------- */
+const ATS_FAM=[
+  ["Generico",      {contatti:15,sezioni:20,date:15,risultati:15,chiavi:20,pulizia:15}, "media delle regole comuni"],
+  ["Workday",       {contatti:10,sezioni:25,date:25,risultati:10,chiavi:15,pulizia:15}, "sezioni standard e date coerenti"],
+  ["Greenhouse",    {contatti:10,sezioni:15,date:10,risultati:15,chiavi:35,pulizia:15}, "le parole chiave pesano molto"],
+  ["Lever",         {contatti:15,sezioni:15,date:10,risultati:15,chiavi:25,pulizia:20}, "penalizza il testo sporco"],
+  ["SmartRecruiters",{contatti:10,sezioni:25,date:15,risultati:10,chiavi:25,pulizia:15},"sezioni e parole chiave"],
+  ["SuccessFactors",{contatti:10,sezioni:25,date:25,risultati:10,chiavi:15,pulizia:15}, "struttura rigida"]
+];
+const ATS_STOP=/^(esperienz|competenz|conoscenz|lingua|lingue|italiano|tedesco|inglese|francese|patente|disponibil|lavoro|azienda|ricerca|candidat|requisit|mansion|profilo|capacit|squadra|cliente|clienti|giorno|settiman|mese|mesi|anno|anni|zona|lugano|bellinzona|ticino|svizzera|presso|attivit|ruolo|posizione|contratto|tempo|determinato|indeterminato|turni|offresi|cerchiamo|richiest|nostra|nostro|vostra|essere|avere|quale|dovra|sara|inserimento|selezione|persona|persone)/;
+function atsChecks(cv,job){
+  const c={};
+  // un telefono ha almeno 9 cifre: due anni accostati non lo sono
+  const tel=(cv.match(/(?:\+\d{1,3}[\s.\-]?)?(?:\(?\d{2,4}\)?[\s.\-]?){2,}\d{2,4}/g)||[])
+    .some(x=>(x.replace(/\D/g,"").length>=9)&&!/^(19|20)\d{2}[\s.\-]*(19|20)\d{2}$/.test(x.trim()));
+  c.contatti=(/\S+@\S+\.\S{2,}/.test(cv)?0.5:0)+(tel?0.5:0);
+  const sez=[/esperienz|impiego|percorso lavorativo/i,/formazione|istruzione|studi|diploma|laurea/i,/competenz|conoscenz|capacit/i];
+  c.sezioni=sez.filter(r=>r.test(cv)).length/sez.length;
+  const inter=(cv.match(/(19|20)\d{2}\s*[-–—\/]\s*((19|20)\d{2}|oggi|presente|attuale)/gi)||[]).length;
+  const anni=(cv.match(/(19|20)\d{2}/g)||[]).length;
+  c.date=inter>=2?1:inter===1?0.7:anni>=2?0.5:0.15;
+  c.risultati=/(\d+\s*(%|persone|collaborator|client|unit|appartament|addett|dipendent|filial|posti|ore))|(%\s*\d+)/i.test(cv)?1:
+    ((cv.match(/\b\d+\b/g)||[]).length>=4?0.5:0.1);
+  const sporco=[
+    /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(cv),
+    /[│├└┌┐┘┬┴┼─█▓▒░▪◆●○]/.test(cv),
+    cv.split("\n").filter(l=>l.trim().length>25&&l===l.toUpperCase()).length>3,
+    cv.split("\n").filter(l=>l.length>130).length>2,
+    /\t/.test(cv)
+  ].filter(Boolean).length;
+  c.pulizia=Math.max(0,1-sporco/3);
+  c.chiavi=null; c.mancanti=[];
+  if(job&&job.trim().length>40){
+    const freq={};
+    (job.toLowerCase().match(/[a-zà-öø-ÿ]{5,}/g)||[]).forEach(w=>{ if(!ATS_STOP.test(w)) freq[w]=(freq[w]||0)+1; });
+    const top=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,12);
+    if(top.length){
+      const cvl=cv.toLowerCase();
+      const dentro=top.filter(w=>cvl.indexOf(w)>=0);
+      c.chiavi=Math.min(1,dentro.length/Math.max(4,Math.round(top.length*0.6)));
+      c.mancanti=top.filter(w=>cvl.indexOf(w)<0);
+    }
+  }
+  return c;
+}
+function atsPunteggi(c){
+  return ATS_FAM.map(f=>{
+    const w=Object.assign({},f[1]);
+    // se le parole chiave non sono valutabili, il loro peso si ridistribuisce sugli altri criteri
+    if(c.chiavi===null){
+      const altri=Object.keys(w).filter(k=>k!=="chiavi");
+      const quota=w.chiavi/altri.length;
+      altri.forEach(k=>{ w[k]+=quota; });
+      w.chiavi=0;
+    }
+    let num=0,den=0;
+    Object.keys(w).forEach(k=>{ if(w[k]>0&&typeof c[k]==="number"){ num+=c[k]*w[k]; den+=w[k]; } });
+    return {nome:f[0], nota:f[2], p:den?Math.round(num/den*100):0};
+  });
+}
+function atsRacc(c){
+  const r=[];
+  if(c.contatti<1) r.push({t:"Email e telefono devono comparire nelle prime righe, su righe separate.",fix:null});
+  if(c.sezioni<1)  r.push({t:"Usa titoli di sezione standard: ESPERIENZA PROFESSIONALE, FORMAZIONE, COMPETENZE.",fix:"sezioni"});
+  if(c.date<1)     r.push({t:"Scrivi le date come intervalli: 2019–2024, oppure 2024–presente.",fix:"date"});
+  if(c.risultati<1)r.push({t:"Quantifica almeno un risultato per ruolo. Aggiungilo tu: solo numeri veri.",fix:null});
+  if(c.pulizia<1)  r.push({t:"Togli emoji, cornici, tabulazioni e righe tutte maiuscole: rompono la lettura automatica.",fix:"pulizia"});
+  if(c.chiavi!==null&&c.mancanti.length)
+    r.push({t:"Parole dell'annuncio assenti dal CV: "+c.mancanti.slice(0,8).join(", ")+". Aggiungile solo se corrispondono al vero.",fix:null});
+  return r;
+}
+function atsApplica(cv,scelte){
+  let t=cv;
+  if(scelte.indexOf("pulizia")>=0){
+    t=t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,"")
+       .replace(/[│├└┌┐┘┬┴┼─█▓▒░▪◆●○]/g,"")
+       .replace(/\t/g," ").replace(/ {2,}/g," ").replace(/\n{3,}/g,"\n\n");
+  }
+  if(scelte.indexOf("date")>=0){
+    t=t.replace(/((?:19|20)\d{2})\s*[-–—\/]\s*((?:19|20)\d{2})/g,"$1–$2")
+       .replace(/((?:19|20)\d{2})\s*[-–—\/]\s*(oggi|presente|attuale)/gi,"$1–presente");
+  }
+  if(scelte.indexOf("sezioni")>=0){
+    t=t.replace(/^[ \t]*[^\n]{0,40}(esperienz\w*|percorso lavorativo|impiego)[^\n]{0,20}$/im,"ESPERIENZA PROFESSIONALE")
+       .replace(/^[ \t]*[^\n]{0,40}(formazione|istruzione|studi)[^\n]{0,20}$/im,"FORMAZIONE")
+       .replace(/^[ \t]*[^\n]{0,40}(competenz\w*|conoscenz\w*|capacit\w*)[^\n]{0,20}$/im,"COMPETENZE");
+  }
+  return t.trim();
 }
 
 /* ---------- aggregazione gap: i numeri sono calcolati, mai dedotti dal modello ---------- */
@@ -1205,7 +1415,7 @@ $("btnSearchReal").addEventListener("click",async()=>{
       out={txt:JSON.stringify({offerte:cached.offerte}),query:[],dacache:true};
     } else {
       sbCheck();
-      busy($("realResults"),"Ricerca sui portali… ("+sbStato()+")");
+      busy($("realResults"),"Cerco le opportunità più adatte a te… ("+sbStato()+")");
       sbUsata();
       out=await llmSearch(prompt);
     }
@@ -1227,7 +1437,7 @@ $("btnSearchReal").addEventListener("click",async()=>{
       return;
     }
     $("realResults").innerHTML='<div class="stat"><span><b>'+_trovate.length+'</b> offerte</span>'+
-      (out.dacache?'<span style="color:var(--accent)">da memoria, nessuna quota consumata</span>':'<span>'+esc(sbStato())+'</span>')+
+      (out.dacache?'<span style="color:var(--accent)">da memoria, nessuna quota consumata</span>':'<span>'+esc(sbStato())+(out.motore?' · '+esc(out.motore):'')+'</span>')+
       ((out.query||[]).length?'<span>'+esc(out.query.slice(0,2).join(" · "))+'</span>':'')+'</div>'+
       _trovate.map((o,i)=>'<div class="card"><b style="font-size:16px">'+esc(o.azienda)+'</b>'+
         '<div style="color:var(--muted);font-size:14px;margin-top:2px">'+esc(o.ruolo||"")+(o.luogo?" · "+esc(o.luogo):"")+'</div>'+
@@ -1475,6 +1685,58 @@ $("btnImport").addEventListener("click",()=>{
 });
 
 /* ---------- preferenze e impostazioni ---------- */
+let _atsCv="";
+$("btnAts").addEventListener("click",()=>{
+  const d=store();
+  const cv=(d.badge.cv||"").trim();
+  if(cv.length<100){ toast("Serve il CV nell'AiBadge: incollalo qui sopra.",true); return; }
+  _atsCv=cv;
+  const c=atsChecks(cv,$("atsJob").value);
+  const pt=atsPunteggi(c), rc=atsRacc(c);
+  const col=p=>p>=80?"var(--ok)":p>=60?"var(--warn)":"var(--signal)";
+  let h='<div class="card">'+pt.map(x=>
+    '<div class="dim"><span class="lb">'+esc(x.nome)+'</span><span class="tr"><span class="fl" style="width:'+x.p+
+    '%;background:'+col(x.p)+'"></span></span><span class="vv">'+x.p+'</span></div>'+
+    '<div class="note" style="margin:0 0 8px 0">'+esc(x.nota)+'</div>').join("")+'</div>';
+  h+='<h2>Criteri</h2><div class="card">'+
+    [["contatti","Contatti leggibili"],["sezioni","Titoli di sezione standard"],["date","Date come intervalli"],
+     ["risultati","Risultati quantificati"],["pulizia","Testo pulito"],["chiavi","Parole dell'annuncio"]]
+    .map(k=>{ const v=c[k[0]];
+      const st=v===null?"non valutabile senza annuncio":v>=0.99?"\u2713 a posto":v>=0.5?"\u2248 migliorabile":"\u2717 da sistemare";
+      const cc=v===null?"var(--muted)":v>=0.99?"var(--ok)":v>=0.5?"var(--warn)":"var(--signal)";
+      return '<div class="kv"><b>'+esc(k[1])+'</b><span style="color:'+cc+'">'+esc(st)+'</span></div>'; }).join("")+'</div>';
+  if(rc.length){
+    h+='<h2>Modifiche consigliate</h2><div class="card">'+rc.map((r,i)=>
+      '<label class="pick" style="border:0;padding:10px 0"><input type="checkbox" data-fix="'+(r.fix||"")+'"'+
+      (r.fix?' checked':' disabled')+'><span style="color:var(--paper);font-size:14px">'+esc(r.t)+
+      (r.fix?'':' <em style="color:var(--muted)">— la applichi tu</em>')+'</span></label>').join("")+'</div>'+
+      '<div class="btnrow"><button class="act ghost small" id="btnAtsApply">Applica le modifiche spuntate</button></div>';
+  } else {
+    h+='<div class="card">Nessun problema strutturale rilevato.</div>';
+  }
+  h+='<div id="atsRes"></div>';
+  $("atsOut").innerHTML=h;
+  const ap=$("btnAtsApply");
+  if(ap) ap.addEventListener("click",()=>{
+    const scelte=[];
+    $("atsOut").querySelectorAll('input[data-fix]:checked').forEach(x=>{ if(x.dataset.fix) scelte.push(x.dataset.fix); });
+    if(!scelte.length){ toast("Nessuna modifica automatica selezionata.",true); return; }
+    const pulito=atsApplica(_atsCv,scelte);
+    const c2=atsChecks(pulito,$("atsJob").value), p2=atsPunteggi(c2)[0].p, p1=atsPunteggi(atsChecks(_atsCv,$("atsJob").value))[0].p;
+    $("atsRes").innerHTML='<h2>CV ripulito</h2><div class="stat"><span>generico <b>'+p1+'</b> → <b style="color:var(--ok)">'+p2+'</b></span></div>'+
+      '<pre class="doc">'+esc(pulito)+'</pre>'+
+      '<div class="btnrow"><button class="act ghost small" id="btnAtsCopy">Copia</button>'+
+      '<button class="act ghost small" id="btnAtsUse">Usa come CV del badge</button></div>'+
+      '<p class="note">Nessun fatto è stato aggiunto o modificato: solo pulizia, titoli e formato delle date. Rileggilo comunque.</p>';
+    $("btnAtsCopy").addEventListener("click",()=>copy(pulito,"CV ripulito"));
+    $("btnAtsUse").addEventListener("click",()=>{
+      if(!confirm("Sostituisce il testo del CV nell'AiBadge. I fatti già estratti restano. Procedere?"))return;
+      const dd=store(); dd.badge.cv=pulito; store.write(); $("cvRaw").value=pulito;
+      toast("CV aggiornato. Ricostruisci il badge se vuoi rileggere i fatti.");
+    });
+  });
+});
+
 $("btnFormazione").addEventListener("click",async()=>{
   const d=store(), g=gapStats();
   if(!g.length){toast("Servono annunci analizzati con requisiti scoperti.",true);return;}
@@ -1514,6 +1776,18 @@ $("sProv").addEventListener("change",()=>{
   const g=$("sProv").value==="gemini"; $("baseWrap").hidden=g;
   $("sModel").value=g?"gemini-3.6-flash":"llama-3.3-70b-versatile";
 });
+function rSync(){
+  const g=$("rProv").value==="gemini";
+  $("rKeyWrap").hidden=g; $("rModelWrap").hidden=g;
+  if(!g&&!$("rModel").value) $("rModel").value=($("rProv").value==="perplexity")?"sonar":"perplexity/sonar";
+}
+$("rProv").addEventListener("change",rSync);
+$("btnSaveSearch").addEventListener("click",()=>{
+  const d=store();
+  d.ricerca={provider:$("rProv").value,key:$("rKey").value.trim(),model:$("rModel").value.trim()};
+  store.write(); toast("Motore di ricerca salvato.");
+});
+
 $("btnSaveSet").addEventListener("click",()=>{
   const d=store();
   d.settings={provider:$("sProv").value,key:$("sKey").value.trim(),model:$("sModel").value.trim(),base:$("sBase").value.trim()};
@@ -1593,6 +1867,9 @@ function loadForms(){
   $("sProv").value=d.settings.provider||"gemini";$("sKey").value=d.settings.key||"";
   $("sModel").value=d.settings.model||"gemini-3.6-flash";$("sBase").value=d.settings.base||"";
   $("baseWrap").hidden=($("sProv").value==="gemini");
+  const rc=d.ricerca||{provider:"gemini",key:"",model:""};
+  $("rProv").value=rc.provider||"gemini"; $("rKey").value=rc.key||""; $("rModel").value=rc.model||"";
+  rSync();
 }
 loadForms(); renderBadge(); renderRank(); renderSearch(); renderPresets(); checkBadge(); gRender(); renderGap(); gWarn();
 
