@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#12161c">
-<title>AiJob 0.8.0</title>
+<title>AiJob 0.9.0</title>
 <style>
 :root{
   --ink:#12161c; --ink-2:#1c232d; --paper:#f2efe9; --muted:#8b95a3;
@@ -155,7 +155,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><h1>AiJob</h1><span class="ver">0.8.0</span><span class="dot" id="storeState">local</span></div>
+    <div class="brand"><h1>AiJob</h1><span class="ver">0.9.0</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="add" aria-selected="true">Annuncio</button>
       <button role="tab" data-v="rank" aria-selected="false">AiSearch</button>
@@ -196,6 +196,10 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
   <div id="selBar" hidden></div>
   <div id="rankList"></div>
   <hr class="sep">
+  <div class="btnrow">
+    <button class="act ghost small" id="btnDriveSave">Salva su Drive</button>
+    <button class="act ghost small" id="btnDriveLoad">Ripristina da Drive</button>
+  </div>
   <div class="btnrow">
     <button class="act ghost small" id="btnCsv">Esporta CSV</button>
     <button class="act ghost small" id="btnExport">Esporta backup</button>
@@ -641,6 +645,52 @@ async function calEvent(j,quando){
       reminders:{useDefault:false,overrides:[{method:"popup",minutes:120}]}})});
 }
 
+/* ---------- budget e cache della ricerca ---------- */
+const SB_KEY="aijob.search.v1", SB_MAX_GIORNO=20, SB_MIN_MS=6000, SB_CACHE_H=4;
+function sb(){
+  let o={giorno:"",usate:0,ultima:0,cache:{}};
+  try{ const r=localStorage.getItem(SB_KEY); if(r)o=Object.assign(o,JSON.parse(r)); }catch(e){}
+  const oggi=new Date().toISOString().slice(0,10);
+  if(o.giorno!==oggi){ o.giorno=oggi; o.usate=0; }
+  return o;
+}
+function sbSave(o){ try{ localStorage.setItem(SB_KEY,JSON.stringify(o)); }catch(e){} }
+function sbKey(q){ let h=0; const s=String(q); for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;} return "q"+h; }
+function sbCache(q){
+  const o=sb(), c=o.cache[sbKey(q)];
+  if(!c)return null;
+  if(Date.now()-c.t>SB_CACHE_H*3600000)return null;
+  return c;
+}
+function sbPutCache(q,offerte){
+  const o=sb(); o.cache[sbKey(q)]={t:Date.now(),offerte:offerte};
+  const ks=Object.keys(o.cache);
+  if(ks.length>20){ ks.sort((a,b)=>o.cache[a].t-o.cache[b].t).slice(0,ks.length-20).forEach(k=>delete o.cache[k]); }
+  sbSave(o);
+}
+function sbCheck(){
+  const o=sb();
+  if(o.usate>=SB_MAX_GIORNO) throw new Error("Hai già fatto "+o.usate+" ricerche oggi. Il limite locale è "+SB_MAX_GIORNO+", serve a non esaurire la quota Gemini. Riprova domani o usa le ricerche sui portali.");
+  const att=SB_MIN_MS-(Date.now()-(o.ultima||0));
+  if(att>0) throw new Error("Aspetta "+Math.ceil(att/1000)+" secondi prima di cercare di nuovo.");
+}
+function sbUsata(){ const o=sb(); o.usate++; o.ultima=Date.now(); sbSave(o); }
+function sbStato(){ const o=sb(); return o.usate+"/"+SB_MAX_GIORNO+" ricerche oggi"; }
+function err429(body){
+  let e={}; try{ e=(JSON.parse(body)||{}).error||{}; }catch(x){}
+  let attesa=null, dim=null;
+  (e.details||[]).forEach(d=>{
+    if(d.retryDelay) attesa=String(d.retryDelay).replace("s"," secondi");
+    if(d.violations&&d.violations[0]&&d.violations[0].quotaId) dim=d.violations[0].quotaId;
+    if(d.quotaDimensions&&d.quotaDimensions.model) dim=dim||d.quotaDimensions.model;
+  });
+  let t="Quota Gemini esaurita";
+  if(dim) t+=" ("+dim+")";
+  if(attesa) t+=". Riprova fra "+attesa;
+  else t+=". Di solito si ricarica entro un minuto, o a mezzanotte se è il limite giornaliero";
+  return t+".";
+}
+
 /* ---------- ricerca reale: Gemini con ricerca Google ---------- */
 async function llmSearch(prompt){
   const s=store().settings;
@@ -653,8 +703,8 @@ async function llmSearch(prompt){
       contents:[{role:"user",parts:[{text:prompt}]}],
       tools:[{google_search:{}}],
       generationConfig:{maxOutputTokens:8192}})});
-  if(!r.ok){ const b=(await r.text()).slice(0,300);
-    if(r.status===429) throw new Error("Limite di richieste raggiunto. Aspetta un minuto e riprova.");
+  if(!r.ok){ const b=(await r.text()).slice(0,600);
+    if(r.status===429) throw new Error(err429(b));
     if(r.status===400&&/tool|search/i.test(b)) throw new Error("Il modello scelto non supporta la ricerca. Prova gemini-3.6-flash.");
     throw new Error("Gemini "+r.status+": "+b); }
   const j=await r.json();
@@ -678,7 +728,10 @@ REGOLE ASSOLUTE
 4. Se non riesci a stabilire se e' ancora aperta, scrivilo in "nota".
 
 Rispondi SOLO con questo JSON, senza testo attorno e senza blocchi di codice:
-{"offerte":[{"azienda":"","ruolo":"","luogo":"","fonte":"nome del portale","url":"","sintesi":"due righe su mansioni e requisiti","nota":""}]}`;
+{"offerte":[{"azienda":"","ruolo":"","luogo":"","fonte":"nome del portale","url":"","sintesi":"due righe su mansioni e requisiti","giorni":null,"nota":""}]}
+
+"giorni" = da quanti giorni risulta pubblicato l'annuncio, se la fonte lo indica. null se non lo sai.
+Dai priorita' agli annunci pubblicati di recente: nelle prime 48-72 ore la candidatura riceve molta piu' attenzione.`;
 }
 
 /* ---------- adapter LLM ---------- */
@@ -814,7 +867,9 @@ function pAnalyze(badge,prefs,raw,url){
 
 COMPITO: confronta l'annuncio con il profilo e restituisci:
 {"job":{"company":null,"role":null,"location":null,"contract":null,"schedule":null,"salary":null,
-        "languages":[],"experience_required":null,"contact_email":null,"application_url":null,"deadline":null},
+        "languages":[],"experience_required":null,"contact_email":null,"application_url":null,"deadline":null,
+        "data_pubblicazione":null,"giorni_dalla_pubblicazione":null},
+ "rischio_fantasma":{"punteggio":0,"segnali":[]},
  "fit":{"punteggio":0,"dimensioni":{"competenze":0,"esperienza":0,"lingua":0,"seniority":0,"formazione":0},
         "perche":"due frasi: la persona sa fare questo lavoro?"},
  "convenienza":{"punteggio":0,"dimensioni":{"luogo":0,"salario":0,"contratto":0,"crescita":0,"postazione_fissa":0,"facilita_candidatura":0},
@@ -838,6 +893,13 @@ Se l'utente ha dichiarato un limite in minuti di stazione eretta, pesalo con for
 e citalo in "perche". Se l'annuncio non dice nulla in merito, deducilo dalle mansioni e dillo apertamente.
 Non menzionare mai questo vincolo nei documenti generati ne' come condizione di salute.
 In "evidence" indica il fact_id quando il requisito e' sostenuto da un fatto del profilo.
+
+"giorni_dalla_pubblicazione": quanti giorni fa e' stato pubblicato, se ricavabile dal testo. null se non c'e'.
+"rischio_fantasma": da 0 a 100, quanto l'annuncio sembra pubblicato senza reale intenzione di assumere.
+Segnali che alzano il punteggio: nessuna azienda identificabile, descrizione generica senza mansioni concrete,
+nessun contatto ne' procedura di candidatura, annuncio ripubblicato piu' volte, retribuzione assente unita a
+requisiti vaghi, promesse di guadagno sproporzionate, richieste di pagamento. Elenca i segnali trovati.
+Se l'annuncio e' concreto e verificabile, il punteggio e' basso e "segnali" e' vuoto.
 
 PROFILO (fatti verificati, unica fonte di verita'):
 `+JSON.stringify(badge)+`
@@ -931,7 +993,7 @@ $("btnAnalyze").addEventListener("click",async()=>{
     const out=parseJson(await llm(pAnalyze(badge,d.prefs,raw,url)));
     d.jobs.unshift({id:"AW-"+String(d.jobs.length+1).padStart(4,"0")+"-"+String(Date.now()).slice(-6),
       raw:raw,url:url,job:out.job||{},fit:out.fit||{},conv:out.convenienza||{},
-      verdetto:(out.verdetto||"VALUTA").toUpperCase(),evidence:out.evidence||[],gaps:out.gaps||[],
+      verdetto:(out.verdetto||"VALUTA").toUpperCase(),rischio_fantasma:out.rischio_fantasma||{punteggio:0,segnali:[]},evidence:out.evidence||[],gaps:out.gaps||[],
       colmabile:out.colmabile||[],red_flags:out.red_flags||[],
       packet:null,stato:"DA CONTATTARE",createdAt:Date.now(),followUpAt:null});
     store.write(); clear($("addMsg")); $("jobRaw").value=""; $("jobUrl").value="";
@@ -944,6 +1006,21 @@ $("btnAnalyze").addEventListener("click",async()=>{
 /* ---------- classifica ---------- */
 const STATI=["DA CONTATTARE","INVIATA","RISPOSTA","COLLOQUIO","CHIUSA"];
 function n(v){return typeof v==="number"?v:0;}
+function freschezza(j){
+  const g=(j.job||{}).giorni_dalla_pubblicazione;
+  if(typeof g!=="number"||g<0) return {p:50,gg:null,txt:"data ignota"};
+  if(g<=2)  return {p:100,gg:g,txt:g===0?"oggi":g===1?"ieri":"2 giorni fa"};
+  if(g<=7)  return {p:82,gg:g,txt:g+" giorni fa"};
+  if(g<=14) return {p:60,gg:g,txt:g+" giorni fa"};
+  if(g<=30) return {p:35,gg:g,txt:g+" giorni fa"};
+  return {p:15,gg:g,txt:"oltre un mese fa"};
+}
+function opportunita(j){
+  const f=freschezza(j);
+  const ghost=n((j.rischio_fantasma||{}).punteggio);
+  const v=0.34*n(j.fit.punteggio)+0.28*n(j.conv.punteggio)+0.22*f.p+0.16*(100-ghost);
+  return {tot:Math.round(v), fresh:f, ghost:ghost};
+}
 function renderRank(){
   const d=store(), el=$("rankList");
   if(!d.jobs.length){$("rankHead").innerHTML="";$("phaseFilter").innerHTML="";
@@ -954,7 +1031,7 @@ function renderRank(){
   $("rankHead").innerHTML='<h2>Classifica</h2><div class="stat"><span><b>'+d.jobs.length+
     '</b> annunci</span><span><b>'+cand+'</b> da candidare</span>'+(due?'<span style="color:var(--warn)"><b>'+due+'</b> follow-up scaduti</span>':'')+'</div>';
   renderFilter();
-  const sorted=d.jobs.slice().filter(j=>!filtro||j.stato===filtro).sort((a,b)=>(n(b.conv.punteggio)+n(b.fit.punteggio))-(n(a.conv.punteggio)+n(a.fit.punteggio)));
+  const sorted=d.jobs.slice().filter(j=>!filtro||j.stato===filtro).sort((a,b)=>opportunita(b).tot-opportunita(a).tot);
   if(!sorted.length){el.innerHTML='<div class="empty">Nessun annuncio in questa fase.</div>';renderSel();return;}
   el.innerHTML=sorted.map((j,pos)=>{
     const i=d.jobs.indexOf(j);
@@ -966,8 +1043,14 @@ function renderRank(){
       '<div class="pos">#'+(pos+1)+' · '+esc(j.id)+(overdue?' · FOLLOW-UP SCADUTO':'')+'</div>'+
       '<div class="co">'+esc(j.job.company||"—")+'</div>'+
       '<div class="ro">'+esc(j.job.role||"—")+(j.job.location?" · "+esc(j.job.location):"")+'</div>'+
-      '<div class="scores"><div class="sc"><div class="n">'+n(j.fit.punteggio)+'</div><div class="k">so farlo</div></div>'+
-      '<div class="sc"><div class="n">'+n(j.conv.punteggio)+'</div><div class="k">mi conviene</div></div></div>'+
+      (function(){ const o=opportunita(j);
+        const cf=o.fresh.p>=82?"var(--ok)":o.fresh.p>=50?"var(--warn)":"var(--signal)";
+        return '<div class="scores"><div class="sc"><div class="n" style="font-size:42px">'+o.tot+'</div><div class="k">opportunità</div></div>'+
+        '<div class="sc"><div class="n" style="font-size:22px">'+n(j.fit.punteggio)+'</div><div class="k">so farlo</div></div>'+
+        '<div class="sc"><div class="n" style="font-size:22px">'+n(j.conv.punteggio)+'</div><div class="k">mi conviene</div></div></div>'+
+        '<div style="margin-top:10px;font-size:13px"><span style="color:'+cf+';font-weight:600">'+esc(o.fresh.txt)+'</span>'+
+        (o.fresh.p>=82?' <span style="color:var(--ok)">· finestra utile</span>':'')+
+        (o.ghost>=55?' <span style="color:var(--signal)">· possibile annuncio fantasma</span>':'')+'</div>'; })()+
       '<span class="verdict '+esc(j.verdetto)+'">'+esc(j.verdetto)+'</span>'+
       '</div><div class="acts">'+
       '<button data-why="'+i+'" aria-expanded="false" aria-controls="det'+i+'">Perché?</button>'+
@@ -1111,22 +1194,45 @@ $("btnSearchReal").addEventListener("click",async()=>{
   const d=store();
   if(!d.badge.facts.length){toast("Costruisci prima l'AiBadge dal CV.",true);return;}
   if(!(d.prefs.targets||"").trim()){toast("Indica i ruoli cercati nella scheda AiBadge.",true);return;}
-  const btn=$("btnSearchReal"); btn.disabled=true; busy($("realResults"),"Ricerca sui portali in corso…");
+  const btn=$("btnSearchReal"); btn.disabled=true;
   try{
     const badge=d.badge.facts.filter(f=>f.origine!=="DEDOTTO");
-    const out=await llmSearch(pRicerca(d.prefs,badge));
+    const prompt=pRicerca(d.prefs,badge);
+    const cached=sbCache(prompt);
+    let out;
+    if(cached){
+      busy($("realResults"),"Risultati recenti già in memoria…");
+      out={txt:JSON.stringify({offerte:cached.offerte}),query:[],dacache:true};
+    } else {
+      sbCheck();
+      busy($("realResults"),"Ricerca sui portali… ("+sbStato()+")");
+      sbUsata();
+      out=await llmSearch(prompt);
+    }
     let dati={}; try{ dati=parseJson(out.txt); }catch(e){ dati={}; }
-    _trovate=(dati.offerte||[]).filter(o=>o&&o.url&&o.azienda);
+    const visti={};
+    _trovate=(dati.offerte||[]).filter(o=>{
+      if(!o||!o.url||!o.azienda)return false;
+      const k=(String(o.azienda)+"|"+String(o.ruolo||"")).toLowerCase().replace(/[^a-z0-9]+/g,"");
+      if(visti[k])return false; visti[k]=true; return true;
+    }).sort((a,b)=>{
+      const ga=typeof a.giorni==="number"?a.giorni:999, gb=typeof b.giorni==="number"?b.giorni:999;
+      return ga-gb;
+    });
+    if(!cached&&_trovate.length) sbPutCache(prompt,_trovate);
     if(!_trovate.length){
       $("realResults").innerHTML='<div class="empty">Nessuna offerta trovata con questi termini.'+
         (out.query.length?'<br><span style="font-size:13px">Ricerche provate: '+esc(out.query.slice(0,3).join(" · "))+'</span>':'')+
         '<br><span style="font-size:13px">Prova a cambiare ruoli o zona, oppure usa le ricerche sui portali qui sotto.</span></div>';
       return;
     }
-    $("realResults").innerHTML='<div class="stat"><span><b>'+_trovate.length+'</b> offerte trovate</span>'+
-      (out.query.length?'<span>'+esc(out.query.slice(0,2).join(" · "))+'</span>':'')+'</div>'+
+    $("realResults").innerHTML='<div class="stat"><span><b>'+_trovate.length+'</b> offerte</span>'+
+      (out.dacache?'<span style="color:var(--accent)">da memoria, nessuna quota consumata</span>':'<span>'+esc(sbStato())+'</span>')+
+      ((out.query||[]).length?'<span>'+esc(out.query.slice(0,2).join(" · "))+'</span>':'')+'</div>'+
       _trovate.map((o,i)=>'<div class="card"><b style="font-size:16px">'+esc(o.azienda)+'</b>'+
         '<div style="color:var(--muted);font-size:14px;margin-top:2px">'+esc(o.ruolo||"")+(o.luogo?" · "+esc(o.luogo):"")+'</div>'+
+        (typeof o.giorni==="number"?'<div style="font-size:13px;margin-top:4px;color:'+(o.giorni<=2?"var(--ok)":o.giorni<=7?"var(--warn)":"var(--muted)")+'">'+
+          (o.giorni<=2?"pubblicato da "+o.giorni+" giorni · finestra utile":"pubblicato da "+o.giorni+" giorni")+'</div>':'')+
         (o.sintesi?'<p class="note" style="margin-top:8px">'+esc(o.sintesi)+'</p>':'')+
         (o.nota?'<div class="flag" style="border-color:var(--warn)">'+esc(o.nota)+'</div>':'')+
         '<a class="slink" href="'+esc(o.url)+'" target="_blank" rel="noopener">Apri l\'annuncio<small>'+esc(o.fonte||o.url)+'</small></a>'+
@@ -1163,6 +1269,17 @@ function toggleDetail(i,btn){
   const d=store(), j=d.jobs[i], box=$("det"+i);
   if(box.classList.contains("on")){box.classList.remove("on");btn.setAttribute("aria-expanded","false");return;}
   let h='';
+  (function(){ const o=opportunita(j);
+    h+='<h2>Come nasce il punteggio '+o.tot+'</h2><div class="dims">'+
+      bar("so farlo (34%)",n(j.fit.punteggio))+
+      bar("mi conviene (28%)",n(j.conv.punteggio))+
+      bar("freschezza (22%)",o.fresh.p)+
+      bar("annuncio reale (16%)",100-o.ghost)+'</div>'+
+      '<p class="note">Pesi fissi, calcolo nel codice: il modello non decide questo numero. '+
+      'La freschezza pesa perché nelle prime 48-72 ore un annuncio riceve molta più attenzione.</p>';
+    if((j.rischio_fantasma||{}).segnali&&j.rischio_fantasma.segnali.length)
+      h+='<h2>Segnali di annuncio fantasma</h2>'+j.rischio_fantasma.segnali.map(s=>'<div class="flag">'+esc(s)+'</div>').join("");
+  })();
   h+='<h2>So farlo — '+n(j.fit.punteggio)+'</h2><p class="hint">'+esc(j.fit.perche||"")+'</p><div class="dims">';
   Object.keys(j.fit.dimensioni||{}).forEach(k=>h+=bar(k.replace(/_/g," "),j.fit.dimensioni[k]));
   h+='</div>';
@@ -1283,10 +1400,53 @@ async function makePacket(i){
 
 /* ---------- backup ---------- */
 function csvCell(v){return '"'+String(v==null?"":v).replace(/"/g,'""').replace(/[\r\n]+/g," ")+'"';}
+const DRIVE_BK="aijob-backup.json";
+$("btnDriveSave").addEventListener("click",async()=>{
+  if(!gOk()){ toast("Collego Google, poi riprendo…"); gAuthStart({a:"bksave"}); return; }
+  const b=$("btnDriveSave"); b.disabled=true; b.textContent="Salvo…";
+  try{
+    const dati=new TextEncoder().encode(JSON.stringify(store(),null,2));
+    const esist=await gFetch("https://www.googleapis.com/drive/v3/files?q="+
+      encodeURIComponent("name='"+DRIVE_BK+"' and trashed=false")+"&fields=files(id,name)&pageSize=1");
+    const id=(esist.files&&esist.files[0])?esist.files[0].id:null;
+    const bnd="bk"+Date.now();
+    const body="--"+bnd+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+
+      JSON.stringify({name:DRIVE_BK})+"\r\n--"+bnd+
+      "\r\nContent-Type: application/json\r\nContent-Transfer-Encoding: base64\r\n\r\n"+
+      b64(dati)+"\r\n--"+bnd+"--";
+    await gFetch("https://www.googleapis.com/upload/drive/v3/files"+(id?"/"+id:"")+"?uploadType=multipart",
+      {method:id?"PATCH":"POST",headers:{"Content-Type":"multipart/related; boundary="+bnd},body:body});
+    toast(id?"Backup aggiornato su Drive.":"Backup creato su Drive.");
+  }catch(e){ toast(e.message,true); }
+  finally{ b.disabled=false; b.textContent="Salva su Drive"; }
+});
+$("btnDriveLoad").addEventListener("click",async()=>{
+  if(!gOk()){ toast("Collego Google, poi riprendo…"); gAuthStart({a:"bkload"}); return; }
+  const b=$("btnDriveLoad"); b.disabled=true; b.textContent="Cerco…";
+  try{
+    const l=await gFetch("https://www.googleapis.com/drive/v3/files?q="+
+      encodeURIComponent("name='"+DRIVE_BK+"' and trashed=false")+"&fields=files(id,modifiedTime)&pageSize=1");
+    if(!l.files||!l.files.length){ toast("Nessun backup trovato su Drive.",true); return; }
+    const f=l.files[0];
+    const quando=new Date(f.modifiedTime).toLocaleString("it-CH");
+    if(!confirm("Backup del "+quando+".\n\nSostituisce tutti i dati attuali. Procedere?")) return;
+    const t=gToken();
+    const r=await fetch("https://www.googleapis.com/drive/v3/files/"+f.id+"?alt=media",
+      {headers:{Authorization:"Bearer "+t}});
+    if(!r.ok) throw new Error("Lettura fallita ("+r.status+").");
+    const j=await r.json();
+    if(!j||!Array.isArray(j.jobs)) throw new Error("Il file non è un backup AiJob valido.");
+    mem=j; store.write(); loadForms(); renderBadge(); renderRank(); renderGap(); renderSearch();
+    toast("Ripristinato dal backup del "+quando+".");
+  }catch(e){ toast(e.message,true); }
+  finally{ b.disabled=false; b.textContent="Ripristina da Drive"; }
+});
+
 $("btnCsv").addEventListener("click",()=>{
   const d=store();
-  const head=["ID","Azienda","Ruolo","Luogo","So farlo","Mi conviene","Postazione fissa","Verdetto","Fase","Contatto","Fonte","Creato","Follow-up"];
-  const rows=d.jobs.map(j=>[j.id,j.job.company,j.job.role,j.job.location,n(j.fit.punteggio),n(j.conv.punteggio),
+  const head=["ID","Azienda","Ruolo","Luogo","Opportunità","So farlo","Mi conviene","Giorni dalla pubblicazione","Rischio fantasma","Postazione fissa","Verdetto","Fase","Contatto","Fonte","Creato","Follow-up"];
+  const rows=d.jobs.map(j=>[j.id,j.job.company,j.job.role,j.job.location,opportunita(j).tot,n(j.fit.punteggio),n(j.conv.punteggio),
+    (j.job.giorni_dalla_pubblicazione==null?"":j.job.giorni_dalla_pubblicazione),n((j.rischio_fantasma||{}).punteggio),
     n((j.conv.dimensioni||{}).postazione_fissa),j.verdetto,j.stato,j.job.contact_email,j.url,
     new Date(j.createdAt).toLocaleDateString("it-CH"),j.followUpAt?new Date(j.followUpAt).toLocaleDateString("it-CH"):""]);
   const csv="\ufeff"+[head,...rows].map(r=>r.map(csvCell).join(";")).join("\r\n");
@@ -1456,6 +1616,11 @@ loadForms(); renderBadge(); renderRank(); renderSearch(); renderPresets(); check
   });
   const p=r.pending;
   if(!p){ document.querySelector('nav.tabs button[data-v="set"]').click(); return; }
+  if(p.a==="bksave"||p.a==="bkload"){
+    document.querySelector('nav.tabs button[data-v="rank"]').click();
+    setTimeout(()=>{ const x=$(p.a==="bksave"?"btnDriveSave":"btnDriveLoad"); if(x)x.click(); },400);
+    return;
+  }
   document.querySelector('nav.tabs button[data-v="rank"]').click();
   setTimeout(()=>{
     const b=document.querySelector('button[data-why="'+p.i+'"]');
