@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#06070a">
-<title>AiJob 0.14.0</title>
+<title>AiJob 0.15.0</title>
 <style>
 :root{
   --ink:#06070a; --ink-2:#101419; --paper:#f2efe9; --muted:#8b95a3;
@@ -172,7 +172,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><h1>AiJob</h1><span class="ver">0.14.0</span><span class="dot" id="storeState">local</span></div>
+    <div class="brand"><h1>AiJob</h1><span class="ver">0.15.0</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="oggi" aria-selected="true">Oggi</button>
       <button role="tab" data-v="add" aria-selected="false">Annuncio</button>
@@ -330,6 +330,11 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 </section>
 
 <section class="view" id="v-info">
+  <h2>Autodiagnosi</h2>
+  <p class="hint">Controlli deterministici sui dati e sulla configurazione. Nessuna chiamata AI: le regole stanno nel codice e chiunque può rileggerle.</p>
+  <div class="btnrow"><button class="act ghost small" id="btnAuto">Esegui l'autodiagnosi</button></div>
+  <div id="autoBox"></div>
+
   <h2>Mappa AiWorld</h2>
   <p class="hint">Dove si colloca AiJob nell'ecosistema. AiSecretary non sta dentro un dominio: li attraversa.</p>
   <div id="mapBox"></div>
@@ -874,6 +879,21 @@ function renderCatena(){
   $("catena").innerHTML='<div class="card">'+riga("Ragionamento",cr)+riga("Ricerca",cc)+
     '</div><p class="note">Il primo della fila prova per primo. Se non risponde o è a quota, tocca al successivo, senza che tu debba fare nulla.</p>';
 }
+async function modelliOpenRouter(){
+  // elenco pubblico, non richiede chiave
+  let r;
+  try{ r=await fetch("https://openrouter.ai/api/v1/models"); }
+  catch(e){ throw new Error("Non riesco a leggere l'elenco dei modelli di OpenRouter."); }
+  if(!r.ok) throw new Error("OpenRouter "+r.status+" leggendo l'elenco dei modelli.");
+  const j=await r.json();
+  const tutti=(j.data||[]).filter(m=>m&&m.id);
+  const gratis=tutti.filter(m=>{
+    const p=m.pricing||{};
+    const zero=v=>v===0||v==="0"||parseFloat(v)===0;
+    return /:free$/.test(m.id)||(zero(p.prompt)&&zero(p.completion));
+  });
+  return {gratis:gratis, totale:tutti.length};
+}
 function renderProv(){
   renderCatena();
   const sbb=$("sbStatoBox"); if(sbb) sbb.textContent=sbStato();
@@ -892,12 +912,31 @@ function renderProv(){
       '<div class="field"><label>Chiave</label><input type="password" data-k="'+id+'" value="'+esc(c.key)+'" placeholder="incolla qui" autocomplete="off"></div>'+
       (P.tipo==="tavily"?'':'<div class="field"><label>Modello</label><input type="text" data-m="'+id+'" value="'+esc(c.model)+'" placeholder="'+esc(P.modello||"")+'"></div>')+
       (id==="custom"?'<div class="field"><label>Indirizzo del servizio</label><input type="url" data-b="'+id+'" value="'+esc(c.base)+'" placeholder="https://…/v1"></div>':'')+
+      (id==="openrouter"?'<div class="btnrow"><button class="act ghost small" data-free="1">Mostra i modelli gratuiti</button></div><div data-freebox></div>':'')+
       '<div class="btnrow"><button class="act ghost small" data-save="'+id+'">Salva</button>'+
       (P.console?'<a class="act ghost small" style="text-align:center;line-height:26px;text-decoration:none" href="'+esc(P.console)+'" target="_blank" rel="noopener">Ottieni la chiave</a>':'')+'</div>'+
       (pronto&&P.ragiona?'<div class="btnrow"><button class="act ghost small" data-pri="ragionamento|'+id+'"'+(pri.ragionamento===id?' disabled':'')+'>'+(pri.ragionamento===id?"È il primo per il ragionamento":"Usa per primo nel ragionamento")+'</button></div>':'')+
       (pronto&&P.cerca?'<div class="btnrow"><button class="act ghost small" data-pri="ricerca|'+id+'"'+(pri.ricerca===id?' disabled':'')+'>'+(pri.ricerca===id?"È il primo per la ricerca":"Usa per primo nella ricerca")+'</button></div>':'')+
       '</div></details>';
   }).join("");
+  $("provList").querySelectorAll("button[data-free]").forEach(b=>b.addEventListener("click",async()=>{
+    const box=b.closest("details").querySelector("[data-freebox]");
+    b.disabled=true; busy(box,"Leggo l'elenco…");
+    try{
+      const e=await modelliOpenRouter();
+      if(!e.gratis.length){ box.innerHTML='<div class="warnbox">Nessun modello gratuito disponibile in questo momento.</div>'; return; }
+      box.innerHTML='<p class="note">'+e.gratis.length+' modelli gratuiti su '+e.totale+
+        '. Toccane uno per usarlo. Richiedono i permessi di training attivi su openrouter.ai/settings/privacy.</p>'+
+        '<div class="chips">'+e.gratis.slice(0,24).map(m=>
+          '<button data-pick="'+esc(m.id)+'">'+esc(String(m.id).replace(/:free$/,"").split("/").pop())+'</button>').join("")+'</div>';
+      box.querySelectorAll("button[data-pick]").forEach(x=>x.addEventListener("click",()=>{
+        const inp=b.closest("details").querySelector('input[data-m]');
+        if(inp) inp.value=x.dataset.pick;
+        toast("Modello scelto: "+x.dataset.pick+". Ora tocca Salva.");
+      }));
+    }catch(err){ clear(box); toast(err.message,true); }
+    finally{ b.disabled=false; }
+  }));
   $("provList").querySelectorAll("button[data-save]").forEach(b=>b.addEventListener("click",()=>{
     const id=b.dataset.save, box=b.closest("details"), d=store();
     if(!d.agenti)d.agenti={};
@@ -928,10 +967,10 @@ const PROVIDER={
     console:"https://openrouter.ai/keys", nota:"molti modelli con una chiave sola; i modelli :free richiedono un'impostazione privacy"},
   groq:{nome:"Groq", tipo:"openai", ragiona:true, cerca:false,
     base:"https://api.groq.com/openai/v1", modello:"llama-3.3-70b-versatile",
-    console:"https://console.groq.com/keys", nota:"veloce, piano gratuito"},
+    console:"https://console.groq.com/keys", nota:"piano gratuito generoso, funziona dal browser"},
   deepseek:{nome:"DeepSeek", tipo:"openai", ragiona:true, cerca:false,
     base:"https://api.deepseek.com", modello:"deepseek-chat",
-    console:"https://platform.deepseek.com/api_keys", nota:"economico"},
+    console:"https://platform.deepseek.com/api_keys", nota:"nessun piano gratuito: serve credito prepagato"},
   perplexity:{nome:"Perplexity Sonar", tipo:"openai", ragiona:true, cerca:"nativa",
     base:"https://api.perplexity.ai", modello:"sonar",
     console:"https://www.perplexity.ai/settings/api", nota:"cerca e sintetizza insieme"},
@@ -1148,6 +1187,108 @@ function renderBrief(){
   }
 }
 
+/* ---------- autodiagnosi: invarianti verificate in codice ---------- */
+function autoDiagnosi(){
+  const d=store(), r=[];
+  const ok=(t,x)=>r.push({liv:"ok",t:t,d:x||""});
+  const av=(t,x,fix)=>r.push({liv:"avviso",t:t,d:x||"",fix:fix||null});
+  const ko=(t,x,fix)=>r.push({liv:"errore",t:t,d:x||"",fix:fix||null});
+
+  // 1. agenti
+  const cr=catena("ragionamento"), cc=catena("ricerca");
+  if(!cr.length) ko("Nessun agente di ragionamento","Senza, analisi e documenti non funzionano.");
+  else if(cr.length===1) av("Un solo agente di ragionamento","Se va in quota, AiJob si ferma. Groq ha un piano gratuito e funziona dal browser.");
+  else ok("Ragionamento con ricaduta",cr.length+" agenti in fila.");
+  if(!cc.length) ko("Nessun motore di ricerca","Tavily è gratuito e non chiede la carta.");
+  else if(cc.length===1) av("Un solo motore di ricerca","Conviene averne due.");
+  else ok("Ricerca con ricaduta",cc.length+" motori in fila.");
+  Object.keys(PROVIDER).forEach(id=>{
+    if(agCfg(id).key && PROVIDER[id].browser===false)
+      av(PROVIDER[id].nome+" non è utilizzabile","Ha una chiave ma non accetta richieste da una pagina web: resta escluso dalle catene.");
+  });
+
+  // 2. profilo
+  if(!d.badge.facts.length) ko("AiBadge vuoto","Senza fatti non c'è confronto possibile.");
+  else {
+    const ded=d.badge.facts.filter(f=>f.origine==="DEDOTTO").length;
+    const senzaFonte=d.badge.facts.filter(f=>f.origine==="DOCUMENTO"&&!f.fonte).length;
+    if(ded) av(ded+" fatti ancora dedotti","Non entrano nel confronto né nei documenti finché non li confermi.");
+    if(senzaFonte) ko(senzaFonte+" fatti marcati come documentati ma senza fonte",
+      "Contraddizione: un fatto dal CV deve avere la frase che lo sostiene.","puliscifatti");
+    if(!ded&&!senzaFonte) ok("AiBadge coerente",d.badge.facts.length+" fatti, tutti con origine dichiarata.");
+  }
+  if(!(d.prefs.targets||"").trim()) av("Ruoli cercati non indicati","Senza, la ricerca non sa cosa cercare.");
+
+  // 3. candidature
+  let senzaEv=0, senzaPunt=0, orfani=0;
+  d.jobs.forEach(j=>{
+    if(!j.evidence||!j.evidence.length) senzaEv++;
+    if(typeof (j.fit||{}).punteggio!=="number"||typeof (j.conv||{}).punteggio!=="number") senzaPunt++;
+    if(j.packet&&(!j.job||!j.job.company)) orfani++;
+  });
+  if(senzaPunt) ko(senzaPunt+" candidature senza punteggio","Non possono entrare in classifica in modo corretto.","ricalcola");
+  if(senzaEv) av(senzaEv+" candidature senza registro evidenze","Analizzale di nuovo per ottenerlo.");
+  if(orfani) av(orfani+" dossier senza azienda","Dati incompleti, probabilmente da un'analisi interrotta.");
+  if(d.jobs.length&&!senzaPunt&&!senzaEv) ok("Candidature coerenti",d.jobs.length+" annunci con punteggio ed evidenze.");
+
+  // 4. memoria
+  let peso=0; try{ peso=JSON.stringify(d).length; }catch(e){}
+  const mb=(peso/1048576).toFixed(2);
+  if(peso>4*1048576) ko("Memoria quasi piena ("+mb+" MB)","Il browser potrebbe rifiutare i salvataggi. Esporta e riduci.","potaCache");
+  else if(peso>2*1048576) av("Memoria in crescita ("+mb+" MB)","Esporta un backup.");
+  else ok("Memoria in ordine",mb+" MB usati.");
+  const sbo=sb(), nc=Object.keys(sbo.cache||{}).length;
+  if(nc>12) av(nc+" ricerche in memoria temporanea","Occupano spazio senza servire più.","potaCache");
+
+  // 5. Google
+  if(gOk()) ok("Google collegato","");
+  else av("Google non collegato","Bozze Gmail, Drive e Calendario restano indisponibili.");
+  const bl=gBlocco();
+  if(bl) ko("Ambiente non adatto a Google",bl);
+
+  return r;
+}
+function autoRipara(azione){
+  const d=store();
+  if(azione==="puliscifatti"){
+    let n=0;
+    d.badge.facts.forEach(f=>{ if(f.origine==="DOCUMENTO"&&!f.fonte){ f.origine="DEDOTTO"; n++; } });
+    store.write(); return n+" fatti riportati a dedotti: ora li confermi tu.";
+  }
+  if(azione==="ricalcola"){
+    let n=0;
+    d.jobs.forEach(j=>{
+      if(typeof (j.fit||{}).punteggio!=="number"){ j.fit=Object.assign({punteggio:0,dimensioni:{}},j.fit); n++; }
+      if(typeof (j.conv||{}).punteggio!=="number"){ j.conv=Object.assign({punteggio:0,dimensioni:{}},j.conv); n++; }
+    });
+    store.write(); return n+" campi normalizzati. Rianalizza gli annunci per ottenere punteggi veri.";
+  }
+  if(azione==="potaCache"){
+    const o=sb(); const n=Object.keys(o.cache||{}).length; o.cache={}; sbSave(o);
+    return n+" ricerche rimosse dalla memoria temporanea.";
+  }
+  return "Nessuna azione.";
+}
+function renderAuto(){
+  const r=autoDiagnosi();
+  const col=l=>l==="ok"?"var(--ok)":l==="avviso"?"var(--warn)":"var(--signal)";
+  const seg=l=>l==="ok"?"\u2713":l==="avviso"?"\u2248":"\u2717";
+  const err=r.filter(x=>x.liv==="errore").length, av=r.filter(x=>x.liv==="avviso").length;
+  $("autoBox").innerHTML='<div class="stat"><span><b>'+err+'</b> problemi</span><span><b>'+av+
+    '</b> avvisi</span><span><b>'+r.filter(x=>x.liv==="ok").length+'</b> a posto</span></div>'+
+    '<div class="card">'+r.map((x,i)=>
+      '<div style="padding:11px 0;border-bottom:1px solid #1e2530">'+
+      '<span style="color:'+col(x.liv)+';font-family:var(--mono)">'+seg(x.liv)+'</span> '+
+      '<b style="font-size:15px">'+esc(x.t)+'</b>'+
+      (x.d?'<div style="font-size:13px;color:var(--muted);margin-top:3px">'+esc(x.d)+'</div>':'')+
+      (x.fix?'<div class="btnrow"><button class="act ghost small" data-fix="'+esc(x.fix)+'">Correggi</button></div>':'')+
+      '</div>').join("")+'</div>';
+  $("autoBox").querySelectorAll("button[data-fix]").forEach(b=>b.addEventListener("click",()=>{
+    const msg=autoRipara(b.dataset.fix);
+    renderAuto(); renderBadge(); renderRank(); toast(msg);
+  }));
+}
+
 /* ---------- mappa AiWorld ---------- */
 const MAPPA=[
  ["Strato cognitivo",[
@@ -1189,7 +1330,7 @@ function renderMappa(){
     '</details>').join("");
   const d=store();
   $("verBox").innerHTML=
-    '<div class="kv"><b>Versione</b><span>0.14.0</span></div>'+
+    '<div class="kv"><b>Versione</b><span>0.15.0</span></div>'+
     '<div class="kv"><b>Annunci</b><span>'+d.jobs.length+'</span></div>'+
     '<div class="kv"><b>Fatti nel badge</b><span>'+d.badge.facts.length+'</span></div>'+
     '<div class="kv"><b>Ragionamento</b><span>'+esc(catena("ragionamento").map(x=>PROVIDER[x].nome).join(" → ")||"nessuno")+'</span></div>'+
@@ -2004,9 +2145,10 @@ async function awStateWrite(){
     }
   }catch(e){}
   stato.moduli.AiJob={
-    versione:"0.14.0", aggiornato:new Date().toISOString(),
+    versione:"0.15.0", aggiornato:new Date().toISOString(),
     annunci:d.jobs.length, in_attesa:b.attesa, colloqui:b.colloqui,
     azioni_aperte:b.azioni.length, fatti_badge:d.badge.facts.length,
+    autodiagnosi_problemi:autoDiagnosi().filter(x=>x.liv==="errore").length,
     url:"https://robertonarcisojr.github.io/AiJob/"
   };
   const id=stato._id; delete stato._id;
@@ -2031,6 +2173,8 @@ async function awStateRead(){
   return await r.json();
 }
 window._agTest={};
+$("btnAuto").addEventListener("click",()=>renderAuto());
+
 $("btnAwState").addEventListener("click",async()=>{
   if(!gOk()){ toast("Collego Google, poi riprendo…"); gAuthStart({a:"awstate"}); return; }
   const b=$("btnAwState"); b.disabled=true; busy($("awStateBox"),"Leggo lo stato…");
