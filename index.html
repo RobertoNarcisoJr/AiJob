@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#12161c">
-<title>AiJob 0.7.2</title>
+<title>AiJob 0.8.0</title>
 <style>
 :root{
   --ink:#12161c; --ink-2:#1c232d; --paper:#f2efe9; --muted:#8b95a3;
@@ -155,7 +155,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
 
 <header class="top">
   <div class="wrap">
-    <div class="brand"><h1>AiJob</h1><span class="ver">0.7.2</span><span class="dot" id="storeState">local</span></div>
+    <div class="brand"><h1>AiJob</h1><span class="ver">0.8.0</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="add" aria-selected="true">Annuncio</button>
       <button role="tab" data-v="rank" aria-selected="false">AiSearch</button>
@@ -185,6 +185,8 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
     <p class="hint" id="qPreview">Costruisci prima l'AiBadge.</p>
     <div class="btnrow"><button class="act small" id="btnSearch">Apri le ricerche</button>
       <button class="act ghost small" id="btnCopyQ">Copia i termini</button></div>
+    <div class="btnrow"><button class="act small" id="btnSearchReal">Cerca davvero in rete</button></div>
+    <div id="realResults" role="status" aria-live="polite"></div>
     <div class="chips" id="presetChips"></div>
     <div id="searchLinks"></div>
     <p class="note">AiJob costruisce la ricerca dai tuoi fatti e la apre sui portali. Non li scansiona: i siti bloccano le richieste dal browser. Lo scan automatico richiede il Worker dal portatile.</p>
@@ -480,6 +482,35 @@ function gHandleReturn(){
   const pend=SS.get("g.pending"); SS.del("g.pending");
   return {ok:true,pending:pend?JSON.parse(pend):null};
 }
+const SCOPE_NOMI={
+  "https://www.googleapis.com/auth/gmail.compose":"Bozze Gmail",
+  "https://www.googleapis.com/auth/drive.file":"File su Drive",
+  "https://www.googleapis.com/auth/calendar.events":"Eventi del calendario"
+};
+async function gScopes(){
+  const t=gToken(); if(!t)return null;
+  try{
+    const r=await fetch("https://oauth2.googleapis.com/tokeninfo?access_token="+encodeURIComponent(t));
+    if(!r.ok)return null;
+    const j=await r.json();
+    return String(j.scope||"").split(/\s+/).filter(Boolean);
+  }catch(e){ return null; }
+}
+async function gScopeMancanti(){
+  const have=await gScopes();
+  if(!have)return null;
+  return GSCOPES.split(" ").filter(s=>have.indexOf(s)<0);
+}
+function spiega403(body){
+  const b=String(body||"");
+  if(/has not been used in project|accessNotConfigured|SERVICE_DISABLED/i.test(b))
+    return "L'API non è attiva nel progetto Google Cloud. Apri console.cloud.google.com → API e servizi → Libreria, e attiva Gmail API, Google Drive API e Google Calendar API.";
+  if(/ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficient(Permissions| authentication scopes)/i.test(b))
+    return "Permesso non concesso. Nella schermata di Google le caselle vanno spuntate tutte e tre: scollega, ricollega e accettale.";
+  if(/access_denied|forbidden/i.test(b))
+    return "Google ha rifiutato la richiesta. Verifica di essere nella lista Utenti di test della schermata di consenso.";
+  return null;
+}
 async function gFetch(url,opt){
   const t=gToken();
   if(!t) throw new Error("Non collegato a Google.");
@@ -487,6 +518,14 @@ async function gFetch(url,opt){
   const r=await fetch(url,opt);
   if(r.status===401){ SS.del("g.tok"); SS.del("g.exp"); gRender();
     throw new Error("Sessione Google scaduta. Ricollega dalla scheda Chiave."); }
+  if(r.status===403){
+    const b=(await r.text()).slice(0,600);
+    const s=spiega403(b);
+    const manc=await gScopeMancanti();
+    if(manc&&manc.length) throw new Error("Permesso mancante: "+manc.map(x=>SCOPE_NOMI[x]||x).join(", ")+
+      ". Scollega e ricollega spuntando tutte le caselle.");
+    throw new Error(s||("Google 403: "+b.slice(0,200)));
+  }
   if(!r.ok) throw new Error("Google "+r.status+": "+(await r.text()).slice(0,200));
   return r.json();
 }
@@ -541,6 +580,12 @@ async function gDiag(){
   r.push(["accounts.google.com", net, net==="raggiungibile"?"ok":"err"]);
   r.push(["Librerie esterne richieste", "nessuna", "ok"]);
   r.push(["Browser Brave", braveDetected?"sì":"no", ""]);
+  if(gOk()){
+    const manc=await gScopeMancanti();
+    if(manc===null) r.push(["Permessi concessi","non verificabili",""]);
+    else if(manc.length) r.push(["Permessi mancanti", manc.map(x=>SCOPE_NOMI[x]||x).join(", "), "err"]);
+    else r.push(["Permessi concessi","tutti e tre","ok"]);
+  }
   r.push(["Token attivo", gOk()?"sì":"no", gOk()?"ok":""]);
   const rotte=r.filter(x=>x[2]==="err");
   r.unshift(["STADIO CHE FALLISCE", rotte.length?rotte[0][0]:"nessuno", rotte.length?"err":"ok"]);
@@ -594,6 +639,46 @@ async function calEvent(j,quando){
       location:j.job.location||"",
       start:{dateTime:start.toISOString()},end:{dateTime:end.toISOString()},
       reminders:{useDefault:false,overrides:[{method:"popup",minutes:120}]}})});
+}
+
+/* ---------- ricerca reale: Gemini con ricerca Google ---------- */
+async function llmSearch(prompt){
+  const s=store().settings;
+  if(s.provider!=="gemini") throw new Error("La ricerca in rete richiede il provider Google Gemini.");
+  if(!s.key) throw new Error("Manca la chiave API nella scheda Chiave.");
+  const m=s.model||"gemini-3.6-flash";
+  const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(m)+
+    ":generateContent?key="+encodeURIComponent(s.key),
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      contents:[{role:"user",parts:[{text:prompt}]}],
+      tools:[{google_search:{}}],
+      generationConfig:{maxOutputTokens:8192}})});
+  if(!r.ok){ const b=(await r.text()).slice(0,300);
+    if(r.status===429) throw new Error("Limite di richieste raggiunto. Aspetta un minuto e riprova.");
+    if(r.status===400&&/tool|search/i.test(b)) throw new Error("Il modello scelto non supporta la ricerca. Prova gemini-3.6-flash.");
+    throw new Error("Gemini "+r.status+": "+b); }
+  const j=await r.json();
+  const c=(j.candidates||[])[0]||{};
+  const txt=((c.content||{}).parts||[]).map(p=>p.text||"").join("");
+  const gm=c.groundingMetadata||{};
+  return {txt:txt, fonti:(gm.groundingChunks||[]).map(x=>x.web||{}).filter(w=>w.uri), query:gm.webSearchQueries||[]};
+}
+function pRicerca(prefs,badge){
+  return `Cerca offerte di lavoro REALMENTE PUBBLICATE e ancora aperte.
+
+Ruoli cercati: `+((prefs.targets||"").trim()||"coerenti con il profilo")+`
+Zona: `+((prefs.where||"Ticino").trim())+`
+Vincoli: `+((prefs.constraints||"nessuno")+"")+`
+Profilo del candidato: `+JSON.stringify((badge||[]).slice(0,12).map(f=>f.claim))+`
+
+REGOLE ASSOLUTE
+1. Usa la ricerca. Riporta SOLO annunci effettivamente trovati nei risultati.
+2. Non inventare aziende, ruoli, luoghi o indirizzi web. Meglio una lista vuota che un annuncio inventato.
+3. Ogni offerta deve avere un url reale preso dai risultati.
+4. Se non riesci a stabilire se e' ancora aperta, scrivilo in "nota".
+
+Rispondi SOLO con questo JSON, senza testo attorno e senza blocchi di codice:
+{"offerte":[{"azienda":"","ruolo":"","luogo":"","fonte":"nome del portale","url":"","sintesi":"due righe su mansioni e requisiti","nota":""}]}`;
 }
 
 /* ---------- adapter LLM ---------- */
@@ -1021,6 +1106,43 @@ function renderSearch(){
     '<a class="slink" target="_blank" rel="noopener" href="https://www.google.com/search?q='+
     encodeURIComponent(termini+" site:"+p[1])+'">'+esc(p[0])+'<small>'+esc(p[2])+'</small></a>').join("");
 }
+let _trovate=[];
+$("btnSearchReal").addEventListener("click",async()=>{
+  const d=store();
+  if(!d.badge.facts.length){toast("Costruisci prima l'AiBadge dal CV.",true);return;}
+  if(!(d.prefs.targets||"").trim()){toast("Indica i ruoli cercati nella scheda AiBadge.",true);return;}
+  const btn=$("btnSearchReal"); btn.disabled=true; busy($("realResults"),"Ricerca sui portali in corso…");
+  try{
+    const badge=d.badge.facts.filter(f=>f.origine!=="DEDOTTO");
+    const out=await llmSearch(pRicerca(d.prefs,badge));
+    let dati={}; try{ dati=parseJson(out.txt); }catch(e){ dati={}; }
+    _trovate=(dati.offerte||[]).filter(o=>o&&o.url&&o.azienda);
+    if(!_trovate.length){
+      $("realResults").innerHTML='<div class="empty">Nessuna offerta trovata con questi termini.'+
+        (out.query.length?'<br><span style="font-size:13px">Ricerche provate: '+esc(out.query.slice(0,3).join(" · "))+'</span>':'')+
+        '<br><span style="font-size:13px">Prova a cambiare ruoli o zona, oppure usa le ricerche sui portali qui sotto.</span></div>';
+      return;
+    }
+    $("realResults").innerHTML='<div class="stat"><span><b>'+_trovate.length+'</b> offerte trovate</span>'+
+      (out.query.length?'<span>'+esc(out.query.slice(0,2).join(" · "))+'</span>':'')+'</div>'+
+      _trovate.map((o,i)=>'<div class="card"><b style="font-size:16px">'+esc(o.azienda)+'</b>'+
+        '<div style="color:var(--muted);font-size:14px;margin-top:2px">'+esc(o.ruolo||"")+(o.luogo?" · "+esc(o.luogo):"")+'</div>'+
+        (o.sintesi?'<p class="note" style="margin-top:8px">'+esc(o.sintesi)+'</p>':'')+
+        (o.nota?'<div class="flag" style="border-color:var(--warn)">'+esc(o.nota)+'</div>':'')+
+        '<a class="slink" href="'+esc(o.url)+'" target="_blank" rel="noopener">Apri l\'annuncio<small>'+esc(o.fonte||o.url)+'</small></a>'+
+        '<div class="btnrow"><button class="act ghost small" data-take="'+i+'">Metti in classifica</button></div></div>').join("")+
+      '<p class="note">Trovate dal motore di ricerca, non verificate una per una. Apri l\'annuncio e controlla che sia ancora aperto prima di candidarti.</p>';
+    $("realResults").querySelectorAll("button[data-take]").forEach(b=>b.addEventListener("click",()=>{
+      const o=_trovate[+b.dataset.take];
+      $("jobRaw").value=[o.azienda,o.ruolo,o.luogo,o.sintesi].filter(Boolean).join("\n");
+      $("jobUrl").value=o.url||"";
+      document.querySelector('nav.tabs button[data-v="add"]').click();
+      toast("Incollato. Meglio ancora: apri l'annuncio e incolla il testo completo.");
+    }));
+  }catch(e){ clear($("realResults")); toast(e.message||"Ricerca fallita.",true); }
+  finally{ btn.disabled=false; }
+});
+
 $("btnSearch").addEventListener("click",()=>{
   const q=queryTerms();
   if(!q.ruoli.length){toast("Indica prima i ruoli cercati nella scheda AiBadge.",true);return;}
@@ -1328,6 +1450,10 @@ loadForms(); renderBadge(); renderRank(); renderSearch(); renderPresets(); check
     return;
   }
   toast("Google collegato.");
+  gScopeMancanti().then(m=>{
+    if(m&&m.length) toast("Attenzione: manca il permesso «"+m.map(x=>SCOPE_NOMI[x]||x).join(", ")+
+      "». Scollega e ricollega spuntando tutte le caselle.",true);
+  });
   const p=r.pending;
   if(!p){ document.querySelector('nav.tabs button[data-v="set"]').click(); return; }
   document.querySelector('nav.tabs button[data-v="rank"]').click();
