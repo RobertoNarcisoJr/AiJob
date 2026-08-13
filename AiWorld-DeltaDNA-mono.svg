@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>AiWorld — Delta DNA, monocromatico</title>
+<circle cx="256" cy="296" r="106" fill="none" stroke="currentColor" stroke-width="22" opacity=".55"/>
+<path d="M256 176 C212 228 300 268 256 320 C212 372 300 388 256 420" fill="none"
+      stroke="currentColor" stroke-width="26" stroke-linecap="round"/>
+<path d="M256 66 L468 432 L44 432 Z" fill="none" stroke="currentColor" stroke-width="38"
+      stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

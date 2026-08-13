@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>AiWorld — Delta DNA</title>
+<defs>
+  <linearGradient id="tri" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0" stop-color="#e8f4fb"/><stop offset=".35" stop-color="#9fb4c4"/>
+    <stop offset=".62" stop-color="#dfeaf3"/><stop offset="1" stop-color="#7f95a8"/>
+  </linearGradient>
+  <radialGradient id="sfera" cx=".36" cy=".3" r=".85">
+    <stop offset="0" stop-color="#cfeeff" stop-opacity=".62"/>
+    <stop offset=".45" stop-color="#2a5f86" stop-opacity=".42"/>
+    <stop offset="1" stop-color="#061421" stop-opacity=".88"/>
+  </radialGradient>
+  <linearGradient id="elica" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#7FD1F0"/><stop offset=".5" stop-color="#22D3EE"/>
+    <stop offset="1" stop-color="#38BDF8"/>
+  </linearGradient>
+  <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="7" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+
+<!-- sfera di vetro -->
+<circle cx="256" cy="300" r="118" fill="url(#sfera)"/>
+<circle cx="256" cy="300" r="118" fill="none" stroke="#8fd4f2" stroke-opacity=".45" stroke-width="3"/>
+<ellipse cx="214" cy="252" rx="46" ry="30" fill="#dff4ff" opacity=".22" transform="rotate(-28 214 252)"/>
+
+<!-- doppia elica -->
+<g filter="url(#glow)" fill="none" stroke="url(#elica)" stroke-width="11" stroke-linecap="round">
+  <path d="M256 150 C214 194 298 238 256 282 C214 326 298 370 256 414"/>
+  <path d="M256 150 C298 194 214 238 256 282 C298 326 214 370 256 414"/>
+</g>
+<g stroke="url(#elica)" stroke-width="6" stroke-linecap="round" opacity=".85">
+  <path d="M234 194 H278"/><path d="M234 238 H278"/>
+  <path d="M234 326 H278"/><path d="M234 370 H278"/>
+</g>
+<g fill="#eafaff" filter="url(#glow)">
+  <circle cx="256" cy="150" r="9"/><circle cx="256" cy="282" r="8"/><circle cx="256" cy="414" r="9"/>
+</g>
+
+<!-- triangolo metallico -->
+<path d="M256 62 L470 434 L42 434 Z" fill="none" stroke="url(#tri)" stroke-width="26"
+      stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M256 62 L470 434 L42 434 Z" fill="none" stroke="#ffffff" stroke-opacity=".30" stroke-width="6"
+      stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

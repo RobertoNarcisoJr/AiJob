@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>AiWorld — Delta DNA, variante compatta</title>
+<defs>
+  <linearGradient id="t2" x1="0" y1="0" x2=".3" y2="1">
+    <stop offset="0" stop-color="#eef7fd"/><stop offset=".5" stop-color="#a9bccb"/><stop offset="1" stop-color="#8299ab"/>
+  </linearGradient>
+  <radialGradient id="s2" cx=".36" cy=".3" r=".85">
+    <stop offset="0" stop-color="#bfe8ff" stop-opacity=".55"/>
+    <stop offset="1" stop-color="#06131f" stop-opacity=".92"/>
+  </radialGradient>
+  <linearGradient id="e2" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#7FD1F0"/><stop offset="1" stop-color="#22D3EE"/>
+  </linearGradient>
+</defs>
+<circle cx="256" cy="296" r="112" fill="url(#s2)"/>
+<g fill="none" stroke="url(#e2)" stroke-width="26" stroke-linecap="round">
+  <path d="M256 168 C210 224 302 268 256 324 C210 380 302 396 256 424"/>
+</g>
+<circle cx="256" cy="168" r="17" fill="#eafaff"/>
+<circle cx="256" cy="424" r="17" fill="#eafaff"/>
+<path d="M256 66 L468 432 L44 432 Z" fill="none" stroke="url(#t2)" stroke-width="40"
+      stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
