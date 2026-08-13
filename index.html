@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#06070a">
 <link rel="icon" href='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%20width%3D%22512%22%20height%3D%22512%22%3E%20%3Ctitle%3EAiWorld%3C%2Ftitle%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%23f2efe9%22%20stroke-width%3D%2240%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%20%3Cpath%20d%3D%22M256%20176%20L432%20452%20L80%20452%20Z%22%2F%3E%20%3Cpath%20d%3D%22M164%20356%20L348%20356%22%2F%3E%20%3C%2Fg%3E%20%3Ccircle%20cx%3D%22256%22%20cy%3D%2284%22%20r%3D%2240%22%20fill%3D%22%23f2efe9%22%2F%3E%20%3C%2Fsvg%3E'>
 <link rel="apple-touch-icon" href='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%20width%3D%22512%22%20height%3D%22512%22%3E%20%3Ctitle%3EAiWorld%3C%2Ftitle%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%23f2efe9%22%20stroke-width%3D%2240%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%20%3Cpath%20d%3D%22M256%20176%20L432%20452%20L80%20452%20Z%22%2F%3E%20%3Cpath%20d%3D%22M164%20356%20L348%20356%22%2F%3E%20%3C%2Fg%3E%20%3Ccircle%20cx%3D%22256%22%20cy%3D%2284%22%20r%3D%2240%22%20fill%3D%22%23f2efe9%22%2F%3E%20%3C%2Fsvg%3E'>
-<title>AiJob 0.24.0</title>
+<title>AiJob 0.25.0</title>
 <style>
 :root{
   --ink:#06070a; --ink-2:#101419; --paper:#f2efe9; --muted:#8b95a3;
@@ -16,18 +16,32 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(38rem 26rem at 12% -6%,rgba(90,150,220,.16),transparent 62%),
+    radial-gradient(32rem 24rem at 92% 4%,rgba(60,190,180,.11),transparent 60%),
+    radial-gradient(40rem 30rem at 50% 108%,rgba(120,110,220,.10),transparent 64%)}
 body{background:var(--ink);color:var(--paper);font-family:var(--sans);font-size:16px;
   line-height:1.6;-webkit-text-size-adjust:100%;padding-bottom:80px}
 .wrap{max-width:720px;margin:0 auto;padding:0 16px}
-header.top{border-bottom:1px solid var(--line);padding:14px 0 0;position:sticky;top:0;z-index:20;background:var(--ink)}
+header.top{border-bottom:1px solid rgba(255,255,255,.09);padding:14px 0 0;position:sticky;top:0;z-index:20;
+  background:rgba(6,7,10,.72);
+  -webkit-backdrop-filter:blur(16px) saturate(170%);backdrop-filter:blur(16px) saturate(170%)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){header.top{background:var(--ink)}}
 .brand{display:flex;align-items:baseline;gap:10px}
 .brand h1{font-size:17px;margin:0;letter-spacing:.06em;font-weight:600}
 .brand .ver{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .brand .dot{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
-nav.tabs{display:flex;border-bottom:1px solid var(--line);margin-top:12px}
-nav.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;
-  color:var(--muted);font-size:14px;font-weight:600;padding:13px 2px;cursor:pointer;min-height:48px}
-nav.tabs button[aria-selected="true"]{color:var(--paper);border-bottom-color:var(--accent)}
+nav.tabs{display:flex;gap:6px;margin:12px 0 10px;padding:4px;border-radius:12px;
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  border:1px solid rgba(255,255,255,.10);
+  background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.02) 50%,rgba(0,0,0,.16));
+  box-shadow:0 1px 0 rgba(255,255,255,.10) inset}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{flex:0 0 auto;background:none;border:0;border-radius:9px;white-space:nowrap;
+  color:var(--muted);font-size:14px;font-weight:600;padding:11px 14px;cursor:pointer;min-height:44px;font-family:var(--sans)}
+nav.tabs button[aria-selected="true"]{color:var(--paper);
+  background:linear-gradient(160deg,rgba(255,255,255,.17),rgba(255,255,255,.05) 55%,rgba(0,0,0,.14));
+  box-shadow:0 1px 0 rgba(255,255,255,.24) inset,0 3px 12px rgba(0,0,0,.42)}
 nav.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 section.view{display:none;padding:18px 0 40px}
 section.view.on{display:block}
@@ -40,19 +54,24 @@ input,textarea,select{width:100%;background:var(--ink-2);border:1px solid var(--
 textarea{resize:vertical;min-height:120px;line-height:1.5}
 input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .field{margin-bottom:16px}
-button.act{background:var(--paper);color:var(--ink);border:0;border-radius:3px;padding:14px 16px;
+button.act{background:var(--paper);color:var(--ink);border:0;border-radius:9px;padding:14px 16px;
   font-size:16px;font-weight:600;cursor:pointer;width:100%;font-family:var(--sans);min-height:48px}
 button.act:disabled{opacity:.4;cursor:not-allowed}
-button.ghost{background:none;color:var(--paper);border:1px solid var(--line)}
+button.ghost{color:var(--paper);border:1px solid rgba(255,255,255,.14);
+  background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.02) 55%,rgba(0,0,0,.14))}
 button.small{padding:10px 12px;font-size:14px;min-height:44px}
 .btnrow{display:flex;gap:8px;margin-top:12px}
 .btnrow>*{flex:1}
-.card{border:1px solid var(--line);border-radius:3px;padding:14px;margin-bottom:12px;background:var(--ink-2)}
+.card{border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:14px;margin-bottom:12px;
+  background:linear-gradient(165deg,rgba(255,255,255,.055),rgba(255,255,255,.015) 55%,rgba(0,0,0,.12));
+  box-shadow:0 1px 0 rgba(255,255,255,.07) inset}
 .card.flat{background:none}
 .empty{border:1px dashed var(--line);border-radius:3px;padding:24px 16px;text-align:center;color:var(--muted);font-size:15px}
 
 /* --- classifica: la decisione prima di tutto --- */
-.rank{border:1px solid var(--line);border-radius:3px;margin-bottom:12px;background:var(--ink-2);overflow:hidden}
+.rank{border:1px solid rgba(255,255,255,.10);border-radius:12px;margin-bottom:12px;overflow:hidden;
+  background:linear-gradient(165deg,rgba(255,255,255,.06),rgba(255,255,255,.018) 55%,rgba(0,0,0,.14));
+  box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 4px 16px rgba(0,0,0,.28)}
 .rank .top{padding:14px}
 .rank .pos{font-family:var(--mono);font-size:13px;color:var(--muted)}
 .rank .co{font-size:17px;font-weight:600;margin-top:2px}
@@ -129,7 +148,8 @@ pre.doc{white-space:pre-wrap;word-wrap:break-word;font-family:var(--sans);font-s
 .chips button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:3px;
   font-family:var(--mono);font-size:12px;padding:9px 11px;cursor:pointer;min-height:40px}
 .chips button[aria-pressed="true"]{border-color:var(--paper);color:var(--paper)}
-.modi{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:16px}
+.modi{display:flex;border:1px solid rgba(255,255,255,.11);border-radius:11px;overflow:hidden;margin-bottom:16px;
+  background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(0,0,0,.12))}
 .modi button{flex:1;background:none;border:0;color:var(--muted);font-size:15px;font-weight:600;
   padding:13px 8px;cursor:pointer;min-height:48px;font-family:var(--sans)}
 .modi button[aria-pressed="true"]{background:var(--ink-2);color:var(--paper);box-shadow:0 1px 0 rgba(255,255,255,.10) inset}
@@ -145,12 +165,13 @@ pre.doc{white-space:pre-wrap;word-wrap:break-word;font-family:var(--sans);font-s
 .chan{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .chan button{flex:1 1 auto;min-width:44%;background:none;border:1px solid var(--line);color:var(--paper);
   border-radius:3px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;min-height:48px}
-.slink{display:block;border:1px solid var(--line);border-radius:3px;padding:12px;margin-top:8px;
+.slink{display:block;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:12px;margin-top:8px;
   color:var(--paper);text-decoration:none;font-size:14px;font-weight:600;min-height:44px}
 .slink small{display:block;color:var(--muted);font-weight:400;font-size:13px;margin-top:3px}
 .saluto{font-size:22px;font-weight:600;margin:4px 0 2px}
 .data{font-family:var(--mono);font-size:13px;color:var(--muted);margin-bottom:18px}
-.azione{border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:3px;padding:13px;margin-bottom:10px;background:var(--ink-2)}
+.azione{border:1px solid rgba(255,255,255,.09);border-left:3px solid var(--muted);border-radius:10px;padding:13px;margin-bottom:10px;
+  background:linear-gradient(165deg,rgba(255,255,255,.055),rgba(255,255,255,.015) 55%,rgba(0,0,0,.12))}
 .azione.urg{border-left-color:var(--signal)}
 .azione.ok{border-left-color:var(--ok)}
 .azione.att{border-left-color:var(--warn)}
@@ -205,7 +226,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:22px 0}
     <div class="brand"><svg viewBox="0 0 512 512" width="22" height="22" aria-hidden="true" style="flex:0 0 22px">
       <g fill="none" stroke="var(--paper)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
       <path d="M256 176 L432 452 L80 452 Z"/><path d="M164 356 L348 356"/></g>
-      <circle cx="256" cy="84" r="40" fill="var(--paper)"/></svg><h1>AiJob</h1><span class="ver">0.24.0</span><span class="dot" id="storeState">local</span></div>
+      <circle cx="256" cy="84" r="40" fill="var(--paper)"/></svg><h1>AiJob</h1><span class="ver">0.25.0</span><span class="dot" id="storeState">local</span></div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-v="oggi" aria-selected="true">Home</button>
       <button role="tab" data-v="rank" aria-selected="false">AiSearch</button>
@@ -1658,7 +1679,7 @@ function renderMappa(){
     '</details>').join("");
   const d=store();
   $("verBox").innerHTML=
-    '<div class="kv"><b>Versione</b><span>0.24.0</span></div>'+
+    '<div class="kv"><b>Versione</b><span>0.25.0</span></div>'+
     '<div class="kv"><b>Annunci</b><span>'+d.jobs.length+'</span></div>'+
     '<div class="kv"><b>Fatti nel badge</b><span>'+d.badge.facts.length+'</span></div>'+
     '<div class="kv"><b>Ragionamento</b><span>'+esc(catena("ragionamento").map(x=>PROVIDER[x].nome).join(" → ")||"nessuno")+'</span></div>'+
@@ -2749,7 +2770,7 @@ async function awStateWrite(){
     }
   }catch(e){}
   stato.moduli.AiJob={
-    versione:"0.24.0", aggiornato:new Date().toISOString(),
+    versione:"0.25.0", aggiornato:new Date().toISOString(),
     annunci:d.jobs.length, in_attesa:b.attesa, colloqui:b.colloqui,
     azioni_aperte:b.azioni.length, fatti_badge:d.badge.facts.length,
     autodiagnosi_problemi:autoDiagnosi().filter(x=>x.liv==="errore").length,
