@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>AiWorld — Delta Oro</title>
+<defs>
+  <linearGradient id="oro" x1=".1" y1="0" x2=".8" y2="1">
+    <stop offset="0" stop-color="#f7e3a8"/><stop offset=".28" stop-color="#d9b164"/>
+    <stop offset=".55" stop-color="#f3dda0"/><stop offset=".78" stop-color="#b5893f"/>
+    <stop offset="1" stop-color="#e8cd8c"/>
+  </linearGradient>
+  <radialGradient id="sf" cx=".36" cy=".3" r=".85">
+    <stop offset="0" stop-color="#cdeeff" stop-opacity=".5"/>
+    <stop offset=".5" stop-color="#1b4a68" stop-opacity=".4"/>
+    <stop offset="1" stop-color="#04121d" stop-opacity=".9"/>
+  </radialGradient>
+  <linearGradient id="dna" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#8ee6ff"/><stop offset=".5" stop-color="#22D3EE"/>
+    <stop offset="1" stop-color="#38BDF8"/>
+  </linearGradient>
+  <filter id="g2" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="6" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+<circle cx="256" cy="300" r="112" fill="url(#sf)"/>
+<circle cx="256" cy="300" r="112" fill="none" stroke="#7fd1f0" stroke-opacity=".35" stroke-width="3"/>
+<ellipse cx="218" cy="258" rx="42" ry="27" fill="#e8f8ff" opacity=".18" transform="rotate(-28 218 258)"/>
+<g filter="url(#g2)" fill="none" stroke="url(#dna)" stroke-width="11" stroke-linecap="round">
+  <path d="M256 158 C216 200 296 242 256 284 C216 326 296 368 256 410"/>
+  <path d="M256 158 C296 200 216 242 256 284 C296 326 216 368 256 410"/>
+</g>
+<g stroke="url(#dna)" stroke-width="6" stroke-linecap="round" opacity=".8">
+  <path d="M236 200 H276"/><path d="M236 242 H276"/><path d="M236 326 H276"/><path d="M236 368 H276"/>
+</g>
+<g fill="#eafaff" filter="url(#g2)">
+  <circle cx="256" cy="158" r="9"/><circle cx="256" cy="284" r="8"/><circle cx="256" cy="410" r="9"/>
+</g>
+<path d="M256 62 L470 434 L42 434 Z" fill="none" stroke="url(#oro)" stroke-width="28"
+      stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M256 62 L470 434 L42 434 Z" fill="none" stroke="#fff6dc" stroke-opacity=".38" stroke-width="6"
+      stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
