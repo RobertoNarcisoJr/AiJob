@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>Browser agent</title>
+<body><pre id="log">boot…</pre>
+<script src="../aibridge.js"></script>
+<script src="../ailanguage.js"></script>
+<script src="../p4/ailanguage-validators.js"></script>
+<script src="../p5/browser-agent-adapter.js"></script>
+<script>
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; };
+
+// Web Worker VERO, creato da un Blob: nessun file esterno, stesso origin.
+const sorgenteWorker = `
+  self.onmessage = (e) => {
+    const m = e.data;
+    const h = m.payload;
+    if (typeof h === 'string') {
+      // modalita' testo: l'agente risponde restituendo il blocco ricevuto
+      self.postMessage({ __id: m.__id, payload: h });
+    } else {
+      self.postMessage({ __id: m.__id, payload: { eco: h.objective, vincoli: Object.keys(h.constraints || {}) } });
+    }
+  };`;
+const url = URL.createObjectURL(new Blob([sorgenteWorker], { type: 'text/javascript' }));
+const worker = new Worker(url);
+
+const bridge = AiBridge.createBridge({ nodeId: 'agente-browser', channelName: 'aiworld-p5r' });
+const esegui = BrowserAgentAdapter.fromWorker(worker);
+
+const adapterJson = BrowserAgentAdapter.createAdapter({ bridge, id: 'EXT-WORKER-01', mode: 'json', execute: esegui, timeoutMs: 5000 });
+const adapterText = BrowserAgentAdapter.createAdapter({
+  bridge: AiBridge.createBridge({ nodeId: 'agente-testo', channelName: false }),
+  id: 'EXT-CLAUDE-01', mode: 'text', al: AiLanguageValidators, execute: esegui, timeoutMs: 5000
+});
+adapterJson.listen();
+
+window.__runWorker = (h) => adapterJson.execute(h, {});
+window.__runText = (h) => adapterText.execute(h, {});
+window.__workerReale = (typeof Worker === 'function');
+log('nodeId=' + bridge.nodeId + ' worker=' + window.__workerReale);
+window.__pronto = true;
+</script>
+</body>

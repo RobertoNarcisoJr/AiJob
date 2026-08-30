@@ -1,0 +1,39 @@
+<!doctype html><meta charset="utf-8"><title>AiAgents node</title>
+<body><pre id="log">boot…</pre>
+<script src="../ailanguage.js"></script>
+<script src="../aibridge.js"></script>
+<script src="../aifold.js"></script>
+<script src="../aieval.js"></script>
+<script src="../executors.js"></script>
+<script src="../constitutional.js"></script>
+<script src="../aiagents.js"></script>
+<script src="../index.js"></script>
+<script src="../p1/aiaccess.js"></script>
+<script src="../p1/aievents-agents.js"></script>
+<script src="../p2/aibridge-client.js"></script>
+<script>
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; };
+const params = new URLSearchParams(location.search);
+const LENTO = +(params.get('slow') || 0);
+const EVENTI = 'Concerto in riva — Idroscalo, Milano — 2026-08-23\nSagra — Cologno Monzese — 2026-08-23';
+
+const world = AiWorld.boot({ nodeId: 'aiagents', channelName: 'aiworld-p2r', persist: false });
+AiEventsAgents.wire(world, {
+  consent: { hasConsent: () => true },
+  layers: [{
+    id: 'EXT-GEMINI-01', enabled: () => true,
+    call: async () => {
+      if (LENTO) await new Promise(r => setTimeout(r, LENTO));
+      return { text: EVENTI, sources: ['https://example.org/a'] };
+    }
+  }]
+}, { AiAccess });
+AiBridgeClient.publishCapabilities(world);
+
+window.__world = world;
+window.__eseguite = 0;
+world.bridge.on('task.request', async () => { window.__eseguite++; return undefined; });
+log('nodeId=' + world.bridge.nodeId + ' trasporti=' + world.bridge.transports().join(','));
+window.__pronto = true;
+</script>
+</body>

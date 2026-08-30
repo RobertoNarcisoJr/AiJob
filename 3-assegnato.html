@@ -1,0 +1,5 @@
+<script>
+const ConsentManager = { hasConsent: (t) => true };
+window.ConsentManager = ConsentManager;
+const AiAccess = { async ask() { if (!window.ConsentManager?.hasConsent('ai')) return 'bloccato'; return 'ok'; } };
+</script>

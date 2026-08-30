@@ -1,0 +1,24 @@
+===== AL-HANDOFF v0.1 =====
+DA: aiagents    A: EXT-CLAUDE-01
+RUN: -
+
+OBIETTIVO
+  trovare eventi reali a Cologno Monzese e all Idroscalo per il 23 agosto 2026
+
+VINCOLI (nessuno di questi e' negoziabile)
+  - budget: gratuito
+  - date: 2026-08-23
+  - geography: [Idroscalo, Cologno Monzese]
+
+CRITERI DI SUCCESSO (la risposta e' valida solo se li soddisfa tutti)
+  1. ogni evento ha una data esplicita
+  2. ogni evento ricade nelle zone indicate
+  3. almeno una fonte per evento
+
+EVIDENZE GIA' RACCOLTE
+  - [verificata] https://example.org/a
+
+GATE UMANO: SI — non eseguire azioni irreversibili
+
+SIGILLO: 16520ci10t312c su [objective, constraints, acceptance_criteria]
+===== FINE AL-HANDOFF =====

@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>AiJob — modulo che parla col bus</title>
+<body><pre id="log">boot…</pre>
+<!-- Un modulo che NON ospita il runtime: gli bastano 24 KB di client. -->
+<script src="./aiworld-client.js"></script>
+<script>
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; };
+const bridge = AiBridge.createBridge({ nodeId: 'aijob', channelName: 'aiworld' });
+bridge.use(Constitutional.middleware);
+const client = AiBridgeClient.createClient({ bridge, target: 'aievents', timeoutMs: 10000 });
+window.__client = client;
+window.__bridge = bridge;
+window.__pronto = true;
+log('nodeId=' + bridge.nodeId + ' trasporti=' + bridge.transports().join(','));
+</script>
+</body>

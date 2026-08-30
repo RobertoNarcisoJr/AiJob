@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>AiEvents module</title>
+<body><pre id="log">boot…</pre>
+<script src="../aibridge.js"></script>
+<script src="../constitutional.js"></script>
+<script src="../p2/aibridge-client.js"></script>
+<script>
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; };
+const bridge = AiBridge.createBridge({ nodeId: 'aievents', channelName: 'aiworld-p2r' });
+bridge.use(Constitutional.middleware);
+window.__bridge = bridge;
+window.__client = (timeoutMs, retries) => AiBridgeClient.createClient({ bridge, target: 'aiagents', timeoutMs: timeoutMs || 5000, retries: retries == null ? 0 : retries });
+window.__TASK = {
+  intent: 'search_events',
+  context: { prompt: 'eventi stasera', fonti_obbligatorie: true },
+  constraints: { capabilities: ['search_events'], date: '2026-08-23', geography: ['Idroscalo', 'Cologno Monzese'] },
+  success_condition: ['C-14', 'C-15', 'C-04b', 'C-SRC']
+};
+log('nodeId=' + bridge.nodeId + ' trasporti=' + bridge.transports().join(','));
+window.__pronto = true;
+</script>
+</body>

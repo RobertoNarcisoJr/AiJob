@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AiAccess v1.0 — Banco di prova</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #00d4ff; --ok: #3fb950; --err: #f85149;
+    --warn: #d29922; --mono: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 1.5;
+  }
+  header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  header .v { color: var(--accent); font-family: var(--mono); font-size: 13px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .wrap { display: grid; grid-template-columns: 340px 1fr; gap: 0; min-height: calc(100vh - 58px); }
+  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } }
+  .controls { padding: 20px; border-right: 1px solid var(--border); }
+  .out { padding: 20px; overflow-y: auto; max-height: calc(100vh - 58px); }
+  .group { margin-bottom: 22px; }
+  .group h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--muted); margin: 0 0 10px; font-weight: 600;
+  }
+  .toggle { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+  .toggle label { cursor: pointer; }
+  .toggle .hint { color: var(--muted); font-size: 11px; }
+  input[type=checkbox] { width: 34px; height: 18px; appearance: none; background: var(--border);
+    border-radius: 10px; position: relative; cursor: pointer; transition: background .15s; }
+  input[type=checkbox]:checked { background: var(--ok); }
+  input[type=checkbox]::after { content:''; position:absolute; width:14px; height:14px; border-radius:50%;
+    background:#fff; top:2px; left:2px; transition: left .15s; }
+  input[type=checkbox]:checked::after { left: 18px; }
+  select, textarea {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px; font-family: inherit; font-size: 13px;
+  }
+  textarea { font-family: var(--mono); resize: vertical; min-height: 60px; }
+  button {
+    background: var(--accent); color: #001; border: none; border-radius: 6px;
+    padding: 9px 14px; font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.sec { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+  .btnrow { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 12px; animation: fade .2s;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  .card .top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .badge { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+  .badge.ok { background: rgba(63,185,80,.15); color: var(--ok); }
+  .badge.err { background: rgba(248,81,73,.15); color: var(--err); }
+  .badge.prov { background: rgba(0,212,255,.12); color: var(--accent); }
+  .card .layer { color: var(--muted); font-size: 11px; margin-left: auto; }
+  pre { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap;
+    word-break: break-word; color: var(--text); }
+  .trace { color: var(--muted); font-size: 11px; font-family: var(--mono); margin-top: 6px; }
+  .trace span { color: var(--warn); }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .suite-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-family: var(--mono); font-size: 12px; }
+  .suite-row .p { color: var(--ok); } .suite-row .f { color: var(--err); } .suite-row .s { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>AiAccess Facade</h1>
+  <span class="v">v1.0</span>
+  <span class="sub">Banco di prova · provider simulati · parser corretto + NOT_CONFIGURED</span>
+</header>
+<div class="wrap">
+  <div class="controls">
+    <div class="group">
+      <h2>Stato ambiente</h2>
+      <div class="toggle"><label for="consent">Consenso AI (GDPR)</label><input type="checkbox" id="consent" checked></div>
+      <div class="toggle"><label for="proxy">Cloud Proxy attivo</label><input type="checkbox" id="proxy" checked></div>
+      <div class="toggle"><label for="gemini">Chiave Gemini (BYOK)</label><input type="checkbox" id="gemini"></div>
+      <div class="toggle"><label for="dash">Chiave DashScope</label><input type="checkbox" id="dash"></div>
+      <div class="toggle"><label for="nerd">Modalità AiNerd</label><input type="checkbox" id="nerd"><span class="hint"></span></div>
+    </div>
+    <div class="group">
+      <h2>Simula esito layer</h2>
+      <div class="toggle"><label for="proxyFail">Proxy → errore</label><input type="checkbox" id="proxyFail"></div>
+      <select id="proxyErr">
+        <option value="HTTP 429 rate limit">429 rate limit</option>
+        <option value="HTTP 401 unauthorized">401 unauthorized</option>
+        <option value="auth timeout">"auth timeout" (edge case)</option>
+        <option value="Failed to fetch">network / fetch</option>
+        <option value="HTTP 500 internal">500 provider</option>
+      </select>
+      <div class="toggle" style="margin-top:8px"><label for="geminiGround">Gemini → grounding attivo</label><input type="checkbox" id="geminiGround" checked></div>
+    </div>
+    <div class="group">
+      <h2>Prompt</h2>
+      <textarea id="prompt">concerti stasera a milano</textarea>
+      <div class="btnrow">
+        <button onclick="run()">Esegui ask()</button>
+        <button class="sec" onclick="runSuite()">Suite T1–T7</button>
+        <button class="sec" onclick="clearOut()">Pulisci</button>
+      </div>
+    </div>
+  </div>
+  <div class="out" id="out">
+    <div class="empty">Configura l'ambiente a sinistra ed esegui <code>ask()</code>.<br>Ogni chiamata mostra la busta v1.0 completa e la traccia della cascade.</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  MOCK dell'ambiente AiEvents (solo per il banco di prova)
+// ============================================================
+const $ = id => document.getElementById(id);
+let CACHE = new Map();
+
+const ConsentManager = { hasConsent: () => $('consent').checked };
+const AI_CACHE = {
+  async get(k) { return CACHE.get(k) || null; },
+  async set(k, v) { if (v && v.text) CACHE.set(k, v); }
+};
+function getProxyCfg() { return { url: $('proxy').checked ? 'https://mock.proxy' : '' }; }
+let sessionAgentKeys = {};
+const AGENT_PROVIDERS = { gemini: { model: 'gemini-2.5-flash' } };
+async function getApiKeySecure() { return $('dash').checked ? 'mock-dash-key' : null; }
+function needsRealData(t) { return /stasera|oggi|domani|concert|event|meteo|prezz/i.test(t); }
+
+// Provider simulati -----------------------------------------
+async function callCloudProxy(prompt, system, provider) {
+  await wait(120);
+  if ($('proxyFail').checked) return { error: $('proxyErr').value };
+  return { text: `[proxy·${provider}] risposta a: "${prompt}"`, provider: 'cloud-proxy', model: 'auto-mix' };
+}
+async function callAgentCore(id, userText, opts) {
+  await wait(140);
+  const ground = $('geminiGround').checked && needsRealData(userText);
+  const sources = ground ? ['Corriere','TimeOut Milano','Songkick'] : [];
+  let txt = `[gemini] risposta a: "${userText}"`;
+  if (ground) txt += '\n🔎 Fonti: ' + sources.join(' · ');
+  else if (needsRealData(userText)) txt += '\n⚠️ Senza fonti web: proposte da confermare.';
+  return { text: txt, groundingApplied: ground, sources };
+}
+async function fetchWithTimeout(url, opts) {
+  await wait(160);
+  return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '[dashscope·qwen] risposta generata' } }] }) };
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// ============================================================
+//  AiAccess v1.0 — codice ratificato + parser corretto + NOT_CONFIGURED
+// ============================================================
+const SYSTEM_PROMPTS = {
+  default: 'Assistente eventi e viaggi. Italiano, conciso, max 150 parole.',
+  nerd: '' // placeholder: il flag funziona già, il prompt si scrive quando serve
+};
+
+const AiAccess = {
+  contractVersion: "1.0",
+  _trace: [],
+
+  async ask(prompt, options = {}) {
+    this._trace = [];
+    const T = s => this._trace.push(s);
+
+    if (!window.ConsentManager?.hasConsent('ai')) {
+      T('GATE → bloccato'); return this._err('AUTH_ERROR', false, 'Consenso AI non attivo (Profilo → Privacy).');
+    }
+    T('GATE → ok');
+
+    const cached = await AI_CACHE.get(prompt);
+    if (cached) { T('CACHE → hit'); return this._wrap(cached.text, 'cache', null, false, []); }
+    T('CACHE → miss');
+
+    const system = options.flag === 'aiNerd' ? (SYSTEM_PROMPTS.nerd || SYSTEM_PROMPTS.default) : (options.system || SYSTEM_PROMPTS.default);
+    let lastError = null, anyLayerReachable = false;
+
+    // Layer 1: Cloud Proxy
+    if (!options.bypassProxy && typeof getProxyCfg === 'function' && getProxyCfg().url) {
+      anyLayerReachable = true; T('PROXY → tentativo');
+      try {
+        const r = await callCloudProxy(prompt, system, options.proxyProvider || 'auto');
+        if (r && !r.error && r.text) { T('PROXY → ok'); await AI_CACHE.set(prompt, r); return this._wrap(r.text, r.provider || 'cloud-proxy', r.model); }
+        lastError = this._parseError(r?.error || 'Proxy: risposta vuota'); T('PROXY → ' + lastError.code);
+      } catch (e) { lastError = { code:'NETWORK_ERROR', retryable:true, message:e.message }; T('PROXY → NETWORK_ERROR'); }
+    }
+
+    // Layer 2: Gemini BYOK
+    if (typeof sessionAgentKeys !== 'undefined' && sessionAgentKeys?.gemini) {
+      anyLayerReachable = true; T('GEMINI → tentativo');
+      try {
+        const r = await callAgentCore('gemini', prompt, { standalone:true, ...options });
+        if (r && !r.error && r.text) {
+          T('GEMINI → ok');
+          const g = !!(r.groundingMetadata || r.groundingApplied), s = r.sources || [];
+          await AI_CACHE.set(prompt, r);
+          return this._wrap(r.text, 'gemini', AGENT_PROVIDERS.gemini?.model, g, s);
+        }
+        lastError = this._parseError(r?.error || 'Gemini: risposta vuota'); T('GEMINI → ' + lastError.code);
+      } catch (e) { lastError = { code:'PROVIDER_ERROR', retryable:true, message:e.message }; T('GEMINI → PROVIDER_ERROR'); }
+    }
+
+    // Layer 3: DashScope
+    if (typeof getApiKeySecure === 'function') {
+      const dashKey = await getApiKeySecure();
+      if (dashKey) {
+        anyLayerReachable = true; T('DASH → tentativo');
+        try {
+          const r = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+            method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+dashKey},
+            body: JSON.stringify({ model: options.model || 'qwen-turbo',
+              messages:[{role:'system',content:system},{role:'user',content:prompt}], temperature:0.7, max_tokens:350 })
+          }, 25000);
+          if (r.ok) { const d = await r.json(); const text = d.choices?.[0]?.message?.content;
+            if (text) { T('DASH → ok'); await AI_CACHE.set(prompt, {text}); return this._wrap(text, 'dashscope', 'qwen-turbo'); } }
+          lastError = this._parseError('HTTP ' + r.status); T('DASH → ' + lastError.code);
+        } catch (e) { lastError = { code:'PROVIDER_ERROR', retryable:false, message:e.message }; T('DASH → PROVIDER_ERROR'); }
+      }
+    }
+
+    // NOT_CONFIGURED: nessun layer raggiungibile = mancano chiavi/config
+    if (!anyLayerReachable) {
+      T('FALLTHROUGH → nessun layer configurato');
+      return this._err('NOT_CONFIGURED', false, 'Nessun provider AI configurato.', true);
+    }
+    T('FALLTHROUGH → tutti i layer falliti');
+    return this._err(lastError?.code || 'UNKNOWN', lastError?.retryable ?? false, lastError?.message || 'Nessun layer AI disponibile.');
+  },
+
+  _wrap(text, provider, model, groundingApplied=false, sources=[]) {
+    return { contractVersion:this.contractVersion, success:true, text, provider:provider||null,
+      model:model||null, groundingApplied, sources, timestamp:Date.now() };
+  },
+  _err(code, retryable, message, needsSetup=false) {
+    const o = { contractVersion:this.contractVersion, success:false, text:null, provider:null,
+      model:null, groundingApplied:false, sources:[], error:{code,retryable,message}, timestamp:Date.now() };
+    if (needsSetup) o.error.needsSetup = true;
+    return o;
+  },
+  _parseError(errStr) {
+    const msg = String(errStr || ''), low = msg.toLowerCase();
+    // Ordine per PRIORITÀ di transitorietà, non per apparizione
+    if (msg.includes('429') || low.includes('rate limit')) return { code:'RATE_LIMITED', retryable:true, message:msg };
+    if (msg.includes('408') || low.includes('timeout'))    return { code:'TIMEOUT', retryable:true, message:msg };
+    if (low.includes('network') || low.includes('fetch'))  return { code:'NETWORK_ERROR', retryable:true, message:msg };
+    if (msg.includes('401') || msg.includes('403') || low.includes('unauthorized') || low.includes('forbidden'))
+                                                           return { code:'AUTH_ERROR', retryable:false, message:msg };
+    return { code:'PROVIDER_ERROR', retryable:true, message:msg };
+  }
+};
+
+// thin wrapper retrocompatibile
+async function callQwenAI(prompt) {
+  const r = await AiAccess.ask(prompt);
+  return r.success ? { text:r.text } : { error:r.error?.message || 'Errore AI' };
+}
+
+// ============================================================
+//  UI
+// ============================================================
+function syncKeys() { sessionAgentKeys = $('gemini').checked ? { gemini:'mock' } : {}; }
+['gemini'].forEach(id => $(id).addEventListener('change', syncKeys));
+syncKeys();
+
+async function run() {
+  const prompt = $('prompt').value.trim();
+  const opts = $('nerd').checked ? { flag:'aiNerd', model:'qwen-coder-plus' } : {};
+  const res = await AiAccess.ask(prompt, opts);
+  render(res, prompt);
+}
+
+function render(res, prompt) {
+  const out = $('out');
+  if (out.querySelector('.empty')) out.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'card';
+  const ok = res.success;
+  const provBadge = res.provider ? `<span class="badge prov">${res.provider}</span>` : '';
+  const nerdBadge = $('nerd').checked ? `<span class="badge prov">AiNerd</span>` : '';
+  card.innerHTML = `
+    <div class="top">
+      <span class="badge ${ok?'ok':'err'}">${ok?'success':res.error.code}</span>
+      ${provBadge}${nerdBadge}
+      <span class="layer">contractVersion ${res.contractVersion}</span>
+    </div>
+    <pre>${JSON.stringify(res, null, 2)}</pre>
+    <div class="trace">cascade: ${AiAccess._trace.map(t=>`<span>${t}</span>`).join(' → ')}</div>`;
+  out.prepend(card);
+}
+
+function clearOut() { CACHE.clear(); $('out').innerHTML = '<div class="empty">Cache svuotata. Pronto per nuovi test.</div>'; }
+
+async function runSuite() {
+  const out = $('out'); if (out.querySelector('.empty')) out.innerHTML = '';
+  const rows = [];
+  const T = (id, name, pass, extra='') => rows.push({id,name,pass,extra});
+  const p = AiAccess._parseError;
+
+  // T1 gate
+  const c = $('consent').checked; $('consent').checked = false;
+  const t1 = await AiAccess.ask('x'); T('T1','GDPR gate → AUTH_ERROR', !t1.success && t1.error.code==='AUTH_ERROR');
+  $('consent').checked = c;
+
+  // T4 parser (incl. edge case auth timeout)
+  T('T4','429→RATE_LIMITED', p('HTTP 429').code==='RATE_LIMITED');
+  T('T4','401→AUTH_ERROR non-retry', p('HTTP 401').code==='AUTH_ERROR' && !p('HTTP 401').retryable);
+  T('T4','"auth timeout"→TIMEOUT retry', p('auth timeout').code==='TIMEOUT' && p('auth timeout').retryable, 'edge case: timeout vince su auth');
+  T('T4','fetch→NETWORK_ERROR', p('Failed to fetch').code==='NETWORK_ERROR');
+
+  // T6 shape
+  const ks = Object.keys(AiAccess._wrap('x','p','m')).sort().join(',');
+  const ke = Object.keys(AiAccess._err('E',false,'m')).filter(k=>k!=='error').sort().join(',');
+  T('T6','shape busta coerente', ks===ke);
+
+  // T7 thin wrapper
+  const t7 = await callQwenAI('x'); T('T7','callQwenAI mai busta grezza', !('contractVersion' in t7));
+
+  // NOT_CONFIGURED
+  const sv = ['proxy','gemini','dash'].map(id=>$(id).checked);
+  ['proxy','gemini','dash'].forEach(id=>$(id).checked=false); syncKeys();
+  const tn = await AiAccess.ask('x'); T('NC','tutto off → NOT_CONFIGURED + needsSetup', tn.error.code==='NOT_CONFIGURED' && tn.error.needsSetup===true);
+  ['proxy','gemini','dash'].forEach((id,i)=>$(id).checked=sv[i]); syncKeys();
+
+  const card = document.createElement('div'); card.className='card';
+  const passed = rows.filter(r=>r.pass).length;
+  card.innerHTML = `<div class="top"><span class="badge ${passed===rows.length?'ok':'err'}">${passed}/${rows.length} PASS</span><span class="layer">suite logica pura</span></div>` +
+    rows.map(r=>`<div class="suite-row"><span class="${r.pass?'p':'f'}">${r.pass?'✔':'�’'}</span> <b>${r.id}</b> ${r.name}${r.extra?` <span class="s">— ${r.extra}</span>`:''}</div>`).join('');
+  out.prepend(card);
+}
+</script>
+</body>
+</html>
