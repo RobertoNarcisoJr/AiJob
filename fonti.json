@@ -1,0 +1,46 @@
+{
+  "_come_si_usa": [
+    "Ogni voce e' una fonte. 'attiva': false la spegne senza cancellarla.",
+    "Tipi disponibili: greenhouse, lever, ashby, smartrecruiters, recruitee, personio (serve 'id'),",
+    "jsonld e rss (servono 'url').",
+    "'filtro' e' facoltativo: se c'e', tiene solo gli annunci che contengono una di quelle parole.",
+    "Come si trova l'id: apri la pagina 'Lavora con noi' del datore e guarda l'indirizzo.",
+    "  boards.greenhouse.io/NOME        -> tipo greenhouse, id NOME",
+    "  jobs.lever.co/NOME               -> tipo lever, id NOME",
+    "  jobs.ashbyhq.com/NOME            -> tipo ashby, id NOME",
+    "  jobs.smartrecruiters.com/NOME    -> tipo smartrecruiters, id NOME",
+    "  NOME.recruitee.com               -> tipo recruitee, id NOME",
+    "  NOME.jobs.personio.de o .it      -> tipo personio, id NOME",
+    "Se il datore non usa nessuno di questi, prova 'jsonld' con l'indirizzo della pagina carriera:",
+    "funziona se il sito pubblica i dati strutturati per Google. Se non li pubblica, la fonte",
+    "risultera' 'ok' con 0 annunci, e vorra' dire che quella strada li' non c'e'.",
+    "I portali che vietano l'automazione (Indeed, LinkedIn, Subito, jobs.ch, tutti.ch, anibis...)",
+    "vengono rifiutati anche se li scrivi qui: per quelli si usano gli alert e-mail dentro AiJob."
+  ],
+  "fonti": [
+    {
+      "nome": "ESEMPIO — datore con Greenhouse",
+      "tipo": "greenhouse",
+      "id": "sostituisci-con-il-nome-vero",
+      "azienda": "Nome dell'azienda",
+      "attiva": false,
+      "nota": "Accendila solo dopo aver messo l'id vero, altrimenti restera' in errore."
+    },
+    {
+      "nome": "ESEMPIO — datore con Personio (comune in CH e IT)",
+      "tipo": "personio",
+      "id": "sostituisci-con-il-nome-vero",
+      "azienda": "Nome dell'azienda",
+      "attiva": false
+    },
+    {
+      "nome": "ESEMPIO — pagina carriera con dati strutturati",
+      "tipo": "jsonld",
+      "url": "https://www.esempio.ch/lavora-con-noi",
+      "azienda": "Nome dell'azienda",
+      "fonte": "Sito del datore",
+      "filtro": ["custode", "portiere", "hauswart", "facility", "manutenzione", "portineria"],
+      "attiva": false
+    }
+  ]
+}

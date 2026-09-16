@@ -1,0 +1,17 @@
+{
+ "aggiornato": "2026-09-16T04:00:00+00:00",
+ "totale": 0,
+ "nuovi_oggi": 0,
+ "fonti": [
+  {
+   "fonte": "nessuna fonte accesa",
+   "stato": "in attesa",
+   "trovati": 0,
+   "dettaglio": {
+    "cosa_fare": "apri fonti.json, metti gli id veri dei datori e porta attiva a true"
+   }
+  }
+ ],
+ "annunci": [],
+ "nota": "File di partenza scritto a mano per attivare il Radar. Zero annunci non e' un errore: e' il numero vero finche' nessuna fonte e' accesa. Il workflow lo sostituira' alla prima raccolta."
+}
